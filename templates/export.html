@@ -363,7 +363,8 @@ let selectedIssues = new Set();
 let selectedColumns = new Set(['host_ip', 'plugin_name', 'severity']);
 let availableColumns = [];
 let hostData = [];
-let issueData = [];
+let issueData = []; // All issues
+let filteredIssueData = []; // Issues filtered for selected hosts
 let columnNames = {}; // Custom column names: {key: customName}
 let columnSortable = null; // Sortable instance
 
@@ -378,6 +379,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Update UI
     updateCounts();
+    
+    // Load all issues initially
+    loadAllIssues();
 });
 
 function setupEventListeners() {
@@ -436,25 +440,89 @@ async function loadHosts() {
 }
 
 async function loadIssues() {
+    // This function will be called by loadIssuesForSelectedHosts
+    return;
+}
+
+async function loadAllIssues() {
     try {
         const response = await fetch('/api/export/issues');
         const result = await response.json();
         
         if (result.success) {
             issueData = result.issues;
+            filteredIssueData = [...issueData]; // Start with all issues
             renderIssueSelection();
             updateCounts();
         } else {
             throw new Error(result.error || 'Failed to load issues');
         }
     } catch (error) {
-        console.error('Error loading issues:', error);
+        console.error('Error loading all issues:', error);
         document.getElementById('issueSelection').innerHTML = `
             <div class="alert alert-danger">
                 <i class="bi bi-exclamation-circle me-2"></i>
                 Failed to load issues: ${error.message}
             </div>
         `;
+    }
+}
+
+async function loadIssuesForSelectedHosts() {
+    const selectedHostIds = Array.from(selectedHosts);
+    
+    try {
+        if (selectedHostIds.length === 0) {
+            // No hosts selected, show all issues
+            filteredIssueData = [...issueData];
+            renderIssueSelection();
+            return;
+        }
+        
+        const response = await fetch('/api/export/issues-for-hosts', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                host_ids: selectedHostIds
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            filteredIssueData = result.issues;
+            
+            // Clear any selected issues that are no longer in the filtered list
+            const filteredIssueIds = new Set(filteredIssueData.map(issue => issue.id));
+            const removedIssues = [];
+            selectedIssues.forEach(issueId => {
+                if (!filteredIssueIds.has(issueId)) {
+                    selectedIssues.delete(issueId);
+                    removedIssues.push(issueId);
+                }
+            });
+            
+            renderIssueSelection();
+            updateCounts();
+            
+            // Show notification if issues were filtered out
+            if (result.filtered_for_hosts > 0 && filteredIssueData.length !== issueData.length) {
+                console.log(`Filtered to ${filteredIssueData.length} issues relevant to ${result.filtered_for_hosts} selected host(s)`);
+                
+                if (removedIssues.length > 0) {
+                    console.log(`Removed ${removedIssues.length} previously selected issues that don't affect selected hosts`);
+                }
+            }
+        } else {
+            throw new Error(result.error || 'Failed to load issues for hosts');
+        }
+    } catch (error) {
+        console.error('Error loading issues for hosts:', error);
+        // Fallback to all issues
+        filteredIssueData = [...issueData];
+        renderIssueSelection();
     }
 }
 
@@ -534,6 +602,8 @@ function renderHostSelection() {
                 selectedHosts.delete(hostId);
             }
             updateCounts();
+            // Load issues for the new host selection
+            loadIssuesForSelectedHosts();
             updatePreview();
         });
     });
@@ -541,7 +611,21 @@ function renderHostSelection() {
 
 function renderIssueSelection() {
     const selectedSeverities = Array.from(document.querySelectorAll('.severity-filter:checked')).map(el => el.value);
-    const filteredIssues = issueData.filter(issue => selectedSeverities.includes(issue.severity));
+    const filteredIssues = filteredIssueData.filter(issue => selectedSeverities.includes(issue.severity));
+    
+    // Show info about filtering if hosts are selected
+    let filterInfo = '';
+    if (selectedHosts.size > 0 && filteredIssueData.length !== issueData.length) {
+        filterInfo = `
+            <div class="alert alert-info py-2 mb-2">
+                <small>
+                    <i class="bi bi-funnel me-1"></i>
+                    Showing ${filteredIssueData.length} of ${issueData.length} issues 
+                    (filtered for ${selectedHosts.size} selected host${selectedHosts.size > 1 ? 's' : ''})
+                </small>
+            </div>
+        `;
+    }
     
     const html = filteredIssues.map(issue => {
         const isSelected = selectedIssues.has(issue.id);
@@ -553,13 +637,14 @@ function renderIssueSelection() {
                 <label class="form-check-label small" for="issue${issue.id}">
                     <span class="badge severity-${issue.severity.toLowerCase()} me-2">${issue.severity}</span>
                     <strong>${issue.plugin_name}</strong>
-                    <br><small class="text-muted">${issue.affected_hosts} host(s)</small>
+                    <br><small class="text-muted">${issue.affected_hosts} of selected host(s)</small>
                 </label>
             </div>
         `;
     }).join('');
     
-    document.getElementById('issueSelection').innerHTML = html || '<div class="text-muted">No issues match current filters</div>';
+    const finalHtml = filterInfo + (html || '<div class="text-muted">No issues match current filters</div>');
+    document.getElementById('issueSelection').innerHTML = finalHtml;
     
     // Setup event listeners
     document.querySelectorAll('.issue-checkbox').forEach(checkbox => {
@@ -747,6 +832,7 @@ function selectHostsByOS(osCategory) {
         }
     });
     updateCounts();
+    loadIssuesForSelectedHosts();
     updatePreview();
 }
 
@@ -756,6 +842,7 @@ function selectAllHosts() {
         selectedHosts.add(parseInt(checkbox.value));
     });
     updateCounts();
+    loadIssuesForSelectedHosts();
     updatePreview();
 }
 
@@ -763,10 +850,10 @@ function selectHighSeverity() {
     // Clear current selection
     selectedIssues.clear();
     
-    // Select high and critical severity
+    // Select high and critical severity from filtered issues
     document.querySelectorAll('.issue-checkbox').forEach(checkbox => {
         const issueId = parseInt(checkbox.value);
-        const issue = issueData.find(i => i.id === issueId);
+        const issue = filteredIssueData.find(i => i.id === issueId);
         if (issue && (issue.severity === 'High' || issue.severity === 'Critical')) {
             checkbox.checked = true;
             selectedIssues.add(issueId);
@@ -786,6 +873,7 @@ function clearSelection() {
         checkbox.checked = false;
     });
     updateCounts();
+    loadIssuesForSelectedHosts(); // This will reset to all issues since no hosts selected
     updatePreview();
 }
 
@@ -819,7 +907,7 @@ function selectAllColumnsBtn() {
 
 function updateFilteredData() {
     renderHostSelection();
-    renderIssueSelection();
+    renderIssueSelection(); // This will use the current filteredIssueData
     updateCounts();
 }
 

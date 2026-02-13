@@ -1232,6 +1232,84 @@ def api_export_issues():
     finally:
         conn.close()
 
+@app.route('/api/export/issues-for-hosts', methods=['POST'])
+def api_export_issues_for_hosts():
+    """API endpoint to get issues that exist on specific hosts"""
+    # Initialize database to ensure tables exist
+    init_database()
+    
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No data provided'}), 400
+        
+        host_ids = data.get('host_ids', [])
+        if not host_ids:
+            # If no hosts selected, return all issues
+            return api_export_issues()
+        
+        conn = get_db_connection()
+        
+        # Create placeholders for safe SQL query
+        placeholders = ','.join('?' for _ in host_ids)
+        
+        # Get issues that exist on the selected hosts
+        query = f'''
+        SELECT DISTINCT i.id, i.plugin_id, i.plugin_name, i.severity, 
+               i.risk_factor, i.cvss_score, i.cvss3_score,
+               i.description, i.solution, i.cve,
+               COUNT(DISTINCT hi.host_id) as affected_selected_hosts
+        FROM issues i
+        JOIN host_issues hi ON i.id = hi.issue_id
+        WHERE hi.host_id IN ({placeholders})
+        GROUP BY i.id, i.plugin_id, i.plugin_name, i.severity, 
+                 i.risk_factor, i.cvss_score, i.cvss3_score,
+                 i.description, i.solution, i.cve
+        ORDER BY 
+            CASE i.severity 
+                WHEN 'Critical' THEN 1
+                WHEN 'High' THEN 2
+                WHEN 'Medium' THEN 3
+                WHEN 'Low' THEN 4
+                WHEN 'Info' THEN 5
+                ELSE 6
+            END,
+            affected_selected_hosts DESC
+        '''
+        
+        issues = conn.execute(query, host_ids).fetchall()
+        
+        issue_list = []
+        for issue in issues:
+            issue_list.append({
+                'id': issue['id'],
+                'plugin_id': issue['plugin_id'],
+                'plugin_name': issue['plugin_name'],
+                'severity': issue['severity'],
+                'risk_factor': issue['risk_factor'],
+                'cvss_score': issue['cvss_score'],
+                'cvss3_score': issue['cvss3_score'],
+                'description': issue['description'],
+                'solution': issue['solution'],
+                'cve': issue['cve'],
+                'affected_hosts': issue['affected_selected_hosts']  # Number of selected hosts affected
+            })
+        
+        return jsonify({
+            'success': True,
+            'issues': issue_list,
+            'filtered_for_hosts': len(host_ids)
+        })
+        
+    except Exception as e:
+        print(f"Error in export issues for hosts API: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+    finally:
+        conn.close()
+
 @app.route('/api/export/columns')
 def api_export_columns():
     """API endpoint to get available columns based on parser type"""
