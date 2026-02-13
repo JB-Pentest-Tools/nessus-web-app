@@ -25,6 +25,7 @@ import json
 import csv
 import io
 from parsers import parser_manager
+from ip_extractor import get_ip_extractor
 
 app = Flask(__name__)
 app.secret_key = 'nessus-web-app-secret-key-change-in-production'
@@ -1125,13 +1126,32 @@ def api_export_hosts():
         ORDER BY h.host_ip
         ''').fetchall()
         
+        # Get IP extractor and extract actual IPs
+        ip_extractor = get_ip_extractor(DATABASE_PATH)
+        
         host_list = []
         for host in hosts:
+            # Extract actual IP address
+            actual_ip = ip_extractor.get_host_ip_address(host['id'])
+            
+            # Determine OS category
+            os_category = 'Unknown'
+            if host['operating_system']:
+                os_lower = host['operating_system'].lower()
+                if any(keyword in os_lower for keyword in ['windows', 'microsoft']):
+                    os_category = 'Windows'
+                elif any(keyword in os_lower for keyword in ['linux', 'ubuntu', 'centos', 'rhel', 'debian', 'red hat']):
+                    os_category = 'Linux'
+                elif any(keyword in os_lower for keyword in ['unix', 'aix', 'solaris', 'freebsd']):
+                    os_category = 'Unix'
+            
             host_list.append({
                 'id': host['id'],
                 'host_ip': host['host_ip'],
                 'host_fqdn': host['host_fqdn'],
+                'actual_ip': actual_ip or host['host_ip'],
                 'operating_system': host['operating_system'],
+                'os_category': os_category,
                 'critical_issues': host['critical_issues'],
                 'high_issues': host['high_issues'],
                 'medium_issues': host['medium_issues'],
@@ -1276,6 +1296,7 @@ def api_export_csv():
         issues = data.get('issues', [])
         columns = data.get('columns', [])
         parser_mode = data.get('parser_mode', 'auto')
+        custom_column_names = data.get('column_names', {})
         
         if not hosts or not issues or not columns:
             return jsonify({'success': False, 'error': 'Missing hosts, issues, or columns'}), 400
@@ -1283,15 +1304,34 @@ def api_export_csv():
         # Generate the full export data
         export_data, parser_stats = generate_export_data(hosts, issues, columns, parser_mode)
         
-        # Create CSV
+        # Create CSV with custom headers
         output = io.StringIO()
-        writer = csv.DictWriter(output, fieldnames=columns)
-        writer.writeheader()
         
+        # Use custom column names for headers
+        header_names = []
+        for col in columns:
+            if col in custom_column_names:
+                header_names.append(custom_column_names[col])
+            else:
+                header_names.append(col)
+        
+        # Write manual header row with custom names
+        output.write(','.join(f'"{name}"' for name in header_names) + '\n')
+        
+        # Write data rows
         for row in export_data:
             # Ensure all columns are present
-            csv_row = {col: row.get(col, '') for col in columns}
-            writer.writerow(csv_row)
+            csv_row = [str(row.get(col, '')) for col in columns]
+            # Escape quotes and wrap in quotes if needed
+            escaped_row = []
+            for cell in csv_row:
+                if ',' in cell or '"' in cell or '\n' in cell:
+                    escaped_content = cell.replace('"', '""')
+                    escaped_cell = f'"{escaped_content}"'
+                else:
+                    escaped_cell = cell
+                escaped_row.append(escaped_cell)
+            output.write(','.join(escaped_row) + '\n')
         
         # Create response
         csv_content = output.getvalue()
@@ -1347,10 +1387,16 @@ def generate_export_data(host_ids, issue_ids, selected_columns, parser_mode='aut
         
         export_data = []
         
+        # Get IP extractor for actual IP addresses
+        ip_extractor = get_ip_extractor(DATABASE_PATH)
+        
         for row in rows:
+            # Extract actual IP address
+            actual_ip = ip_extractor.get_host_ip_address(row['host_id'])
+            
             # Base data from database
             base_data = {
-                'host_ip': row['host_ip'],
+                'host_ip': actual_ip or row['host_ip'],  # Use extracted IP or fallback to original
                 'host_fqdn': row['host_fqdn'] or '',
                 'operating_system': row['operating_system'] or '',
                 'mac_address': row['mac_address'] or '',

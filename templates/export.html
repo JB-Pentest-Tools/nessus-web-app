@@ -29,16 +29,33 @@
                 <!-- Quick Filters -->
                 <div class="mb-3">
                     <label class="form-label">Quick Filters</label>
-                    <div class="btn-group d-flex" role="group">
-                        <button type="button" class="btn btn-outline-secondary btn-sm" id="selectAllHosts">
-                            All Hosts
-                        </button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm" id="selectHighSeverity">
-                            High/Critical
-                        </button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm" id="clearSelection">
-                            Clear
-                        </button>
+                    <div class="row g-1">
+                        <div class="col-12">
+                            <div class="btn-group d-flex" role="group">
+                                <button type="button" class="btn btn-outline-secondary btn-sm" id="selectAllHosts">
+                                    All Hosts
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" id="selectHighSeverity">
+                                    High/Critical
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" id="clearSelection">
+                                    Clear
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-12 mt-2">
+                            <div class="btn-group d-flex" role="group">
+                                <button type="button" class="btn btn-outline-info btn-sm" id="selectWindowsHosts">
+                                    <i class="bi bi-windows me-1"></i>Windows
+                                </button>
+                                <button type="button" class="btn btn-outline-success btn-sm" id="selectLinuxHosts">
+                                    <i class="bi bi-terminal me-1"></i>Linux
+                                </button>
+                                <button type="button" class="btn btn-outline-warning btn-sm" id="selectUnixHosts">
+                                    <i class="bi bi-server me-1"></i>Unix
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -137,15 +154,20 @@
                     </div>
                 </div>
 
-                <!-- Column Order -->
+                <!-- Column Order and Naming -->
                 <div class="mb-3">
-                    <label class="form-label">Column Order</label>
-                    <div class="form-text mb-2">Drag to reorder selected columns</div>
-                    <div class="border rounded p-2" style="min-height: 100px;" id="columnOrder">
+                    <label class="form-label">Column Order & Names</label>
+                    <div class="form-text mb-2">Drag to reorder, click to rename columns</div>
+                    <div class="border rounded p-2" style="min-height: 120px;" id="columnOrder">
                         <div class="text-muted text-center">
                             <i class="bi bi-arrow-down-up"></i>
                             <p class="small mb-0">Selected columns will appear here</p>
                         </div>
+                    </div>
+                    <div class="mt-2">
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="resetColumnNames">
+                            <i class="bi bi-arrow-clockwise me-1"></i>Reset Names
+                        </button>
                     </div>
                 </div>
             </div>
@@ -242,6 +264,38 @@
     </div>
 </div>
 
+<!-- Column Rename Modal -->
+<div class="modal fade" id="renameColumnModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-pencil me-2"></i>
+                    Rename Column
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="originalColumnName" class="form-label">Original Name</label>
+                    <input type="text" class="form-control" id="originalColumnName" readonly>
+                </div>
+                <div class="mb-3">
+                    <label for="newColumnName" class="form-label">New Name</label>
+                    <input type="text" class="form-control" id="newColumnName" placeholder="Enter new column name">
+                </div>
+                <div class="form-text">
+                    This will change how the column appears in the exported CSV file.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveColumnName">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Parser Help Modal -->
 <div class="modal fade" id="parserHelpModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
@@ -301,6 +355,8 @@
 {% endblock %}
 
 {% block scripts %}
+<!-- SortableJS for drag and drop -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 <script>
 let selectedHosts = new Set();
 let selectedIssues = new Set();
@@ -308,6 +364,8 @@ let selectedColumns = new Set(['host_ip', 'plugin_name', 'severity']);
 let availableColumns = [];
 let hostData = [];
 let issueData = [];
+let columnNames = {}; // Custom column names: {key: customName}
+let columnSortable = null; // Sortable instance
 
 document.addEventListener('DOMContentLoaded', function() {
     // Load initial data
@@ -328,6 +386,11 @@ function setupEventListeners() {
     document.getElementById('selectHighSeverity').addEventListener('click', selectHighSeverity);
     document.getElementById('clearSelection').addEventListener('click', clearSelection);
     
+    // OS filters
+    document.getElementById('selectWindowsHosts').addEventListener('click', () => selectHostsByOS('Windows'));
+    document.getElementById('selectLinuxHosts').addEventListener('click', () => selectHostsByOS('Linux'));
+    document.getElementById('selectUnixHosts').addEventListener('click', () => selectHostsByOS('Unix'));
+    
     // Severity filters
     document.querySelectorAll('.severity-filter').forEach(filter => {
         filter.addEventListener('change', updateFilteredData);
@@ -339,10 +402,14 @@ function setupEventListeners() {
     // Column selection buttons
     document.getElementById('selectBasicColumns').addEventListener('click', selectBasicColumns);
     document.getElementById('selectAllColumns').addEventListener('click', selectAllColumnsBtn);
+    document.getElementById('resetColumnNames').addEventListener('click', resetColumnNames);
     
     // Export buttons
     document.getElementById('previewBtn').addEventListener('click', previewData);
     document.getElementById('exportBtn').addEventListener('click', exportData);
+    
+    // Column rename modal
+    document.getElementById('saveColumnName').addEventListener('click', saveColumnName);
 }
 
 async function loadHosts() {
@@ -425,14 +492,30 @@ function renderHostSelection() {
         const isSelected = selectedHosts.has(host.id);
         const totalIssues = host.critical_issues + host.high_issues + host.medium_issues + host.low_issues + host.info_issues;
         
+        // OS category badge
+        let osBadge = '';
+        if (host.os_category === 'Windows') {
+            osBadge = '<span class="badge bg-info me-1"><i class="bi bi-windows"></i> Win</span>';
+        } else if (host.os_category === 'Linux') {
+            osBadge = '<span class="badge bg-success me-1"><i class="bi bi-terminal"></i> Linux</span>';
+        } else if (host.os_category === 'Unix') {
+            osBadge = '<span class="badge bg-warning me-1"><i class="bi bi-server"></i> Unix</span>';
+        }
+        
+        // Show actual IP if different from hostname
+        const displayIP = host.actual_ip && host.actual_ip !== host.host_ip ? 
+            `${host.actual_ip} (${host.host_ip})` : host.host_ip;
+        
         return `
-            <div class="form-check">
+            <div class="form-check" data-os-category="${host.os_category}">
                 <input class="form-check-input host-checkbox" type="checkbox" 
                        value="${host.id}" ${isSelected ? 'checked' : ''}
-                       data-host-ip="${host.host_ip}">
+                       data-host-ip="${host.actual_ip || host.host_ip}"
+                       data-os-category="${host.os_category}">
                 <label class="form-check-label small" for="host${host.id}">
-                    <strong>${host.host_ip}</strong>
-                    ${host.host_fqdn ? `<br><small class="text-muted">${host.host_fqdn}</small>` : ''}
+                    ${osBadge}
+                    <strong>${displayIP}</strong>
+                    ${host.host_fqdn && host.host_fqdn !== host.host_ip ? `<br><small class="text-muted">${host.host_fqdn}</small>` : ''}
                     <br><small class="text-warning">${totalIssues} issues</small>
                 </label>
             </div>
@@ -538,6 +621,12 @@ function updateColumnOrder() {
                 <p class="small mb-0">Selected columns will appear here</p>
             </div>
         `;
+        
+        // Destroy existing sortable
+        if (columnSortable) {
+            columnSortable.destroy();
+            columnSortable = null;
+        }
         return;
     }
     
@@ -545,12 +634,21 @@ function updateColumnOrder() {
         const column = availableColumns.find(c => c.key === columnKey);
         if (!column) return '';
         
+        const displayName = columnNames[columnKey] || column.name;
+        const isCustomName = columnNames.hasOwnProperty(columnKey);
+        
         return `
-            <div class="d-flex justify-content-between align-items-center p-2 mb-1 bg-light rounded" data-column="${columnKey}">
-                <span>
-                    <i class="bi bi-grip-vertical text-muted me-2"></i>
-                    ${column.name}
-                </span>
+            <div class="column-item d-flex justify-content-between align-items-center p-2 mb-1 bg-light rounded" data-column="${columnKey}">
+                <div class="d-flex align-items-center flex-grow-1">
+                    <i class="bi bi-grip-vertical text-muted me-2" style="cursor: grab;"></i>
+                    <span class="column-name ${isCustomName ? 'text-primary fw-bold' : ''}" 
+                          onclick="renameColumn('${columnKey}')" 
+                          style="cursor: pointer;" 
+                          title="Click to rename">
+                        ${displayName}
+                    </span>
+                    ${isCustomName ? '<i class="bi bi-pencil-square text-primary ms-1" title="Custom name"></i>' : ''}
+                </div>
                 <button class="btn btn-sm btn-outline-danger" onclick="removeColumn('${columnKey}')">
                     <i class="bi bi-x"></i>
                 </button>
@@ -559,12 +657,96 @@ function updateColumnOrder() {
     }).join('');
     
     orderContainer.innerHTML = html;
+    
+    // Destroy existing sortable
+    if (columnSortable) {
+        columnSortable.destroy();
+    }
+    
+    // Initialize drag and drop
+    columnSortable = Sortable.create(orderContainer, {
+        animation: 150,
+        handle: '.bi-grip-vertical',
+        ghostClass: 'sortable-ghost',
+        onEnd: function(evt) {
+            // Update selectedColumns order based on new DOM order
+            const newOrder = [];
+            orderContainer.querySelectorAll('.column-item').forEach(item => {
+                newOrder.push(item.dataset.column);
+            });
+            
+            selectedColumns.clear();
+            newOrder.forEach(col => selectedColumns.add(col));
+            updatePreview();
+        }
+    });
 }
 
 function removeColumn(columnKey) {
     selectedColumns.delete(columnKey);
     document.querySelector(`.column-checkbox[value="${columnKey}"]`).checked = false;
+    delete columnNames[columnKey]; // Remove custom name if any
     updateColumnOrder();
+    updatePreview();
+}
+
+function renameColumn(columnKey) {
+    const column = availableColumns.find(c => c.key === columnKey);
+    if (!column) return;
+    
+    // Set modal values
+    document.getElementById('originalColumnName').value = column.name;
+    document.getElementById('newColumnName').value = columnNames[columnKey] || column.name;
+    
+    // Store the column key for saving
+    document.getElementById('saveColumnName').dataset.columnKey = columnKey;
+    
+    // Show modal
+    new bootstrap.Modal(document.getElementById('renameColumnModal')).show();
+}
+
+function saveColumnName() {
+    const columnKey = document.getElementById('saveColumnName').dataset.columnKey;
+    const newName = document.getElementById('newColumnName').value.trim();
+    
+    if (!newName) {
+        alert('Please enter a column name');
+        return;
+    }
+    
+    // Save custom name
+    columnNames[columnKey] = newName;
+    
+    // Update display
+    updateColumnOrder();
+    updatePreview();
+    
+    // Close modal
+    bootstrap.Modal.getInstance(document.getElementById('renameColumnModal')).hide();
+}
+
+function resetColumnNames() {
+    columnNames = {};
+    updateColumnOrder();
+    updatePreview();
+}
+
+function selectHostsByOS(osCategory) {
+    // Clear current host selection
+    selectedHosts.clear();
+    
+    document.querySelectorAll('.host-checkbox').forEach(checkbox => {
+        const hostId = parseInt(checkbox.value);
+        const host = hostData.find(h => h.id === hostId);
+        
+        if (host && host.os_category === osCategory) {
+            checkbox.checked = true;
+            selectedHosts.add(hostId);
+        } else {
+            checkbox.checked = false;
+        }
+    });
+    updateCounts();
     updatePreview();
 }
 
@@ -692,8 +874,11 @@ function renderPreview(data) {
     const headers = document.getElementById('previewTableHeaders');
     const body = document.getElementById('previewTableBody');
     
-    // Render headers
+    // Render headers with custom names
     const columnHeaders = Array.from(selectedColumns).map(columnKey => {
+        const customName = columnNames[columnKey];
+        if (customName) return customName;
+        
         const column = availableColumns.find(c => c.key === columnKey);
         return column ? column.name : columnKey;
     });
@@ -760,7 +945,8 @@ async function exportData() {
                 hosts: Array.from(selectedHosts),
                 issues: Array.from(selectedIssues),
                 columns: Array.from(selectedColumns),
-                parser_mode: document.getElementById('parserMode').value
+                parser_mode: document.getElementById('parserMode').value,
+                column_names: columnNames
             })
         });
         
