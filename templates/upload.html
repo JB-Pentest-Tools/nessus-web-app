@@ -1,0 +1,327 @@
+{% extends "base.html" %}
+
+{% block title %}Upload - Nessus Web Application{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2>
+                    <i class="bi bi-cloud-upload text-primary me-2"></i>
+                    Upload Nessus Files
+                </h2>
+                <p class="text-muted mb-0">Upload .xml or .nessus files for analysis</p>
+            </div>
+            <div class="text-end">
+                <small class="text-muted">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Max file size: 100MB
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Upload Area -->
+    <div class="col-lg-8">
+        <div class="card shadow-sm">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-file-earmark-arrow-up me-2"></i>
+                    File Upload
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data" id="uploadForm">
+                    <div class="upload-area mb-3" id="uploadArea">
+                        <i class="bi bi-cloud-upload display-1 text-muted mb-3"></i>
+                        <h4>Drag & Drop Nessus Files Here</h4>
+                        <p class="text-muted mb-4">or click to browse for files</p>
+                        
+                        <input type="file" 
+                               name="file" 
+                               id="fileInput" 
+                               class="form-control d-none" 
+                               accept=".xml,.nessus"
+                               required>
+                        
+                        <button type="button" 
+                                class="btn btn-primary btn-lg" 
+                                id="selectFilesBtn">
+                            <i class="bi bi-folder2-open me-2"></i>
+                            Select Files
+                        </button>
+                    </div>
+                    
+                    <!-- File Info Display -->
+                    <div id="fileInfo" class="d-none">
+                        <div class="alert alert-info">
+                            <i class="bi bi-file-earmark-check me-2"></i>
+                            <strong>Selected File:</strong> <span id="fileName"></span>
+                            <br>
+                            <small>Size: <span id="fileSize"></span></small>
+                        </div>
+                    </div>
+                    
+                    <div class="text-center">
+                        <button type="submit" 
+                                class="btn btn-success btn-lg d-none" 
+                                id="uploadButton">
+                            <i class="bi bi-upload me-2"></i>
+                            Upload & Process
+                        </button>
+                    </div>
+                    
+                    <!-- Progress Bar -->
+                    <div class="progress mt-3 d-none" id="uploadProgress">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                             role="progressbar" 
+                             style="width: 0%"></div>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Upload Instructions -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-question-circle me-2"></i>
+                    Supported File Formats
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6><i class="bi bi-filetype-xml text-warning me-2"></i>Nessus XML (.xml)</h6>
+                        <p class="small text-muted">Standard Nessus export format with full vulnerability data.</p>
+                    </div>
+                    <div class="col-md-6">
+                        <h6><i class="bi bi-file-earmark-code text-primary me-2"></i>Nessus Files (.nessus)</h6>
+                        <p class="small text-muted">Native Nessus format containing scan results and metadata.</p>
+                    </div>
+                </div>
+                
+                <hr>
+                
+                <h6>Processing Features:</h6>
+                <ul class="small">
+                    <li><strong>Automatic Parsing:</strong> Extracts hosts, vulnerabilities, and metadata</li>
+                    <li><strong>Duplicate Detection:</strong> Prevents re-uploading the same file</li>
+                    <li><strong>Database Storage:</strong> Stores all data for fast querying and analysis</li>
+                    <li><strong>Immediate Analysis:</strong> Results available instantly after upload</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Recent Uploads Sidebar -->
+    <div class="col-lg-4">
+        <div class="card shadow-sm">
+            <div class="card-header bg-info text-white">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-clock-history me-2"></i>
+                    Recent Uploads
+                </h6>
+            </div>
+            <div class="card-body p-0">
+                {% if recent_scans %}
+                    {% for scan in recent_scans %}
+                        <div class="p-3 border-bottom">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <h6 class="mb-1">
+                                        <i class="bi bi-file-earmark-text me-1"></i>
+                                        {{ scan.filename|truncate(30) }}
+                                    </h6>
+                                    <small class="text-muted d-block">
+                                        <i class="bi bi-calendar3 me-1"></i>
+                                        {{ scan.upload_date }}
+                                    </small>
+                                </div>
+                            </div>
+                            <div class="row mt-2">
+                                <div class="col-6">
+                                    <small class="text-muted">
+                                        <i class="bi bi-pc-display me-1"></i>
+                                        {{ scan.total_hosts }} hosts
+                                    </small>
+                                </div>
+                                <div class="col-6">
+                                    <small class="text-muted">
+                                        <i class="bi bi-exclamation-triangle me-1"></i>
+                                        {{ scan.total_issues }} issues
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="p-3 text-center text-muted">
+                        <i class="bi bi-inbox display-1 mb-3"></i>
+                        <p>No uploads yet</p>
+                        <small>Upload your first Nessus file to get started</small>
+                    </div>
+                {% endif %}
+            </div>
+            {% if recent_scans %}
+                <div class="card-footer text-center">
+                    <a href="{{ url_for('dashboard') }}" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-speedometer2 me-1"></i>
+                        View Dashboard
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+        
+        <!-- Upload Statistics -->
+        {% if recent_scans %}
+            <div class="card mt-4 shadow-sm">
+                <div class="card-header bg-success text-white">
+                    <h6 class="card-title mb-0">
+                        <i class="bi bi-graph-up me-2"></i>
+                        Quick Stats
+                    </h6>
+                </div>
+                <div class="card-body">
+                    {% set total_hosts = recent_scans|sum(attribute='total_hosts') %}
+                    {% set total_issues = recent_scans|sum(attribute='total_issues') %}
+                    
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <div class="stat-item">
+                                <h4 class="text-primary mb-0">{{ recent_scans|length }}</h4>
+                                <small class="text-muted">Recent Scans</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="stat-item">
+                                <h4 class="text-info mb-0">{{ total_hosts }}</h4>
+                                <small class="text-muted">Total Hosts</small>
+                            </div>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="text-center">
+                        <h4 class="text-warning mb-0">{{ total_issues }}</h4>
+                        <small class="text-muted">Total Issues</small>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const fileSize = document.getElementById('fileSize');
+        const uploadButton = document.getElementById('uploadButton');
+        const uploadForm = document.getElementById('uploadForm');
+        const uploadProgress = document.getElementById('uploadProgress');
+        const selectFilesBtn = document.getElementById('selectFilesBtn');
+        
+        // File selection button click handler
+        selectFilesBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent event bubbling
+            fileInput.click();
+        });
+        
+        // Drag and drop functionality - only trigger if not clicking the button
+        uploadArea.addEventListener('click', (e) => {
+            // Only open file dialog if we didn't click the button or input
+            if (e.target !== selectFilesBtn && e.target !== fileInput && !selectFilesBtn.contains(e.target)) {
+                fileInput.click();
+            }
+        });
+        
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                const file = files[0];
+                if (isValidFile(file)) {
+                    fileInput.files = files;
+                    displayFileInfo(file);
+                } else {
+                    alert('Please select a valid .xml or .nessus file.');
+                }
+            }
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                const file = e.target.files[0];
+                if (isValidFile(file)) {
+                    displayFileInfo(file);
+                } else {
+                    alert('Please select a valid .xml or .nessus file.');
+                    fileInput.value = '';
+                }
+            }
+        });
+        
+        function isValidFile(file) {
+            const validExtensions = ['.xml', '.nessus'];
+            const fileName = file.name.toLowerCase();
+            return validExtensions.some(ext => fileName.endsWith(ext));
+        }
+        
+        function displayFileInfo(file) {
+            fileName.textContent = file.name;
+            fileSize.textContent = formatFileSize(file.size);
+            fileInfo.classList.remove('d-none');
+            uploadButton.classList.remove('d-none');
+        }
+        
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        // Form submission with UI feedback
+        uploadForm.addEventListener('submit', function(e) {
+            if (!fileInput.files.length) {
+                e.preventDefault();
+                alert('Please select a file first.');
+                return;
+            }
+            
+            // Show progress indication
+            uploadProgress.classList.remove('d-none');
+            uploadButton.disabled = true;
+            uploadButton.innerHTML = '<div class="spinner-border spinner-border-sm me-2" role="status"></div>Processing...';
+            
+            // Set progress bar
+            const progressBar = uploadProgress.querySelector('.progress-bar');
+            progressBar.style.width = '100%';
+            progressBar.textContent = 'Uploading and processing...';
+            
+            // Let the form submit normally - Flask will handle the redirect
+            // The progress bar will show until the page redirects
+        });
+    });
+</script>
+{% endblock %}

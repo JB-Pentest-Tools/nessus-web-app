@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Nessus Web Application{% endblock %}</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        .severity-critical {
+            background-color: #dc3545 !important;
+            color: white;
+        }
+        .severity-high {
+            background-color: #fd7e14 !important;
+            color: white;
+        }
+        .severity-medium {
+            background-color: #ffc107 !important;
+            color: black;
+        }
+        .severity-low {
+            background-color: #198754 !important;
+            color: white;
+        }
+        .severity-info {
+            background-color: #0dcaf0 !important;
+            color: black;
+        }
+        
+        .upload-area {
+            border: 2px dashed #6c757d;
+            border-radius: 10px;
+            padding: 50px;
+            text-align: center;
+            transition: all 0.3s ease;
+            background-color: #f8f9fa;
+        }
+        
+        .upload-area:hover {
+            border-color: #0d6efd;
+            background-color: #e3f2fd;
+        }
+        
+        .upload-area.dragover {
+            border-color: #0d6efd;
+            background-color: #e3f2fd;
+            transform: scale(1.02);
+        }
+        
+        .stats-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+        }
+        
+        .host-card {
+            transition: transform 0.2s ease;
+        }
+        
+        .host-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .issue-card {
+            transition: transform 0.2s ease;
+        }
+        
+        .issue-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .sidebar {
+            background: linear-gradient(180deg, #2c3e50 0%, #34495e 100%);
+            min-height: 100vh;
+        }
+        
+        .nav-link {
+            color: rgba(255, 255, 255, 0.8) !important;
+            transition: all 0.3s ease;
+        }
+        
+        .nav-link:hover, .nav-link.active {
+            background-color: rgba(255, 255, 255, 0.1) !important;
+            color: white !important;
+            border-radius: 8px;
+        }
+        
+        .content-area {
+            background-color: #f8f9fa;
+            min-height: 100vh;
+        }
+        
+        .loading-spinner {
+            display: none;
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 400px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar Navigation -->
+            <nav class="col-md-2 d-none d-md-block sidebar px-0">
+                <div class="position-sticky pt-3">
+                    <div class="text-center p-3">
+                        <h4 class="text-white">
+                            <i class="bi bi-shield-check"></i>
+                            Nessus Web
+                        </h4>
+                        <small class="text-white-50">Vulnerability Analysis Platform</small>
+                    </div>
+                    
+                    <ul class="nav nav-pills flex-column mb-auto px-3">
+                        <li class="nav-item">
+                            <a href="{{ url_for('dashboard') }}" 
+                               class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
+                                <i class="bi bi-speedometer2 me-2"></i>
+                                Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('upload') }}" 
+                               class="nav-link {% if request.endpoint == 'upload' %}active{% endif %}">
+                                <i class="bi bi-cloud-upload me-2"></i>
+                                Upload
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('hosts') }}" 
+                               class="nav-link {% if request.endpoint in ['hosts', 'host_detail'] %}active{% endif %}">
+                                <i class="bi bi-pc-display me-2"></i>
+                                Hosts
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('issues') }}" 
+                               class="nav-link {% if request.endpoint in ['issues', 'issue_detail'] %}active{% endif %}">
+                                <i class="bi bi-exclamation-triangle me-2"></i>
+                                Issues
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('admin') }}" 
+                               class="nav-link {% if request.endpoint == 'admin' %}active{% endif %}">
+                                <i class="bi bi-gear me-2"></i>
+                                Admin
+                            </a>
+                        </li>
+                    </ul>
+                    
+                    <div class="px-3 py-4">
+                        <small class="text-white-50">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Built with Flask & Bootstrap
+                        </small>
+                    </div>
+                </div>
+            </nav>
+            
+            <!-- Main Content -->
+            <main class="col-md-10 ms-sm-auto content-area">
+                <!-- Flash Messages -->
+                <div class="flash-messages py-3">
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="alert alert-{% if category == 'error' %}danger{% elif category == 'success' %}success{% elif category == 'warning' %}warning{% else %}info{% endif %} alert-dismissible fade show" role="alert">
+                                    <i class="bi bi-{% if category == 'error' %}exclamation-circle{% elif category == 'success' %}check-circle{% elif category == 'warning' %}exclamation-triangle{% else %}info-circle{% endif %} me-2"></i>
+                                    {{ message }}
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+                </div>
+                
+                <!-- Page Content -->
+                <div class="px-4 py-4">
+                    {% block content %}{% endblock %}
+                </div>
+            </main>
+        </div>
+    </div>
+    
+    <!-- Mobile Navigation Toggle -->
+    <div class="d-md-none">
+        <nav class="navbar navbar-dark bg-dark fixed-bottom">
+            <div class="container-fluid justify-content-around">
+                <a href="{{ url_for('dashboard') }}" class="text-white text-decoration-none">
+                    <i class="bi bi-speedometer2"></i><br>
+                    <small>Dashboard</small>
+                </a>
+                <a href="{{ url_for('upload') }}" class="text-white text-decoration-none">
+                    <i class="bi bi-cloud-upload"></i><br>
+                    <small>Upload</small>
+                </a>
+                <a href="{{ url_for('hosts') }}" class="text-white text-decoration-none">
+                    <i class="bi bi-pc-display"></i><br>
+                    <small>Hosts</small>
+                </a>
+                <a href="{{ url_for('issues') }}" class="text-white text-decoration-none">
+                    <i class="bi bi-exclamation-triangle"></i><br>
+                    <small>Issues</small>
+                </a>
+                <a href="{{ url_for('admin') }}" class="text-white text-decoration-none">
+                    <i class="bi bi-gear"></i><br>
+                    <small>Admin</small>
+                </a>
+            </div>
+        </nav>
+    </div>
+    
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Custom JavaScript -->
+    <script>
+        // Auto-dismiss flash messages after 5 seconds
+        setTimeout(function() {
+            const alerts = document.querySelectorAll('.alert');
+            alerts.forEach(alert => {
+                if (alert.classList.contains('alert-info') || alert.classList.contains('alert-success')) {
+                    const bsAlert = new bootstrap.Alert(alert);
+                    bsAlert.close();
+                }
+            });
+        }, 5000);
+        
+        // Loading spinner helper
+        function showLoading(element) {
+            element.innerHTML = '<div class="loading-spinner spinner-border spinner-border-sm me-2" role="status"></div>Processing...';
+            element.disabled = true;
+        }
+        
+        function hideLoading(element, originalText) {
+            element.innerHTML = originalText;
+            element.disabled = false;
+        }
+    </script>
+    
+    {% block scripts %}{% endblock %}
+</body>
+</html>

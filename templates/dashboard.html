@@ -1,0 +1,446 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Nessus Web Application{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2>
+                    <i class="bi bi-speedometer2 text-primary me-2"></i>
+                    Security Dashboard
+                </h2>
+                <p class="text-muted mb-0">Overview of vulnerability assessment results</p>
+            </div>
+            <div>
+                <button class="btn btn-outline-primary btn-sm" onclick="refreshDashboard()">
+                    <i class="bi bi-arrow-clockwise me-1"></i>
+                    Refresh
+                </button>
+                <a href="{{ url_for('upload') }}" class="btn btn-primary btn-sm">
+                    <i class="bi bi-plus-circle me-1"></i>
+                    Upload New Scan
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Summary Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card stats-card h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-files display-4 mb-3 opacity-75"></i>
+                <h2 class="mb-1">{{ stats.total_scans }}</h2>
+                <p class="mb-0">Total Scans</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card bg-info text-white h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-pc-display display-4 mb-3 opacity-75"></i>
+                <h2 class="mb-1">{{ stats.total_hosts }}</h2>
+                <p class="mb-0">Total Hosts</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card bg-warning text-dark h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-exclamation-triangle display-4 mb-3 opacity-75"></i>
+                <h2 class="mb-1">{{ stats.total_issues }}</h2>
+                <p class="mb-0">Total Issues</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card bg-danger text-white h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-shield-exclamation display-4 mb-3 opacity-75"></i>
+                <h2 class="mb-1">{{ stats.critical_issues + stats.high_issues }}</h2>
+                <p class="mb-0">Critical + High</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div class="row mb-4">
+    <!-- Severity Distribution Chart -->
+    <div class="col-lg-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-pie-chart me-2"></i>
+                    Vulnerability Severity Distribution
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="severityChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Severity Breakdown Table -->
+    <div class="col-lg-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-list-check me-2"></i>
+                    Severity Breakdown
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Severity</th>
+                                <th class="text-end">Count</th>
+                                <th class="text-end">Percentage</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% set total_for_percent = stats.critical_issues + stats.high_issues + stats.medium_issues + stats.low_issues + stats.info_issues %}
+                            
+                            <tr>
+                                <td>
+                                    <span class="badge severity-critical">
+                                        <i class="bi bi-exclamation-octagon me-1"></i>
+                                        Critical
+                                    </span>
+                                </td>
+                                <td class="text-end">{{ stats.critical_issues }}</td>
+                                <td class="text-end">
+                                    {% if total_for_percent > 0 %}
+                                        {{ "%.1f"|format((stats.critical_issues / total_for_percent) * 100) }}%
+                                    {% else %}
+                                        0.0%
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            
+                            <tr>
+                                <td>
+                                    <span class="badge severity-high">
+                                        <i class="bi bi-exclamation-triangle me-1"></i>
+                                        High
+                                    </span>
+                                </td>
+                                <td class="text-end">{{ stats.high_issues }}</td>
+                                <td class="text-end">
+                                    {% if total_for_percent > 0 %}
+                                        {{ "%.1f"|format((stats.high_issues / total_for_percent) * 100) }}%
+                                    {% else %}
+                                        0.0%
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            
+                            <tr>
+                                <td>
+                                    <span class="badge severity-medium">
+                                        <i class="bi bi-exclamation-circle me-1"></i>
+                                        Medium
+                                    </span>
+                                </td>
+                                <td class="text-end">{{ stats.medium_issues }}</td>
+                                <td class="text-end">
+                                    {% if total_for_percent > 0 %}
+                                        {{ "%.1f"|format((stats.medium_issues / total_for_percent) * 100) }}%
+                                    {% else %}
+                                        0.0%
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            
+                            <tr>
+                                <td>
+                                    <span class="badge severity-low">
+                                        <i class="bi bi-info-circle me-1"></i>
+                                        Low
+                                    </span>
+                                </td>
+                                <td class="text-end">{{ stats.low_issues }}</td>
+                                <td class="text-end">
+                                    {% if total_for_percent > 0 %}
+                                        {{ "%.1f"|format((stats.low_issues / total_for_percent) * 100) }}%
+                                    {% else %}
+                                        0.0%
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            
+                            <tr>
+                                <td>
+                                    <span class="badge severity-info">
+                                        <i class="bi bi-info-square me-1"></i>
+                                        Info
+                                    </span>
+                                </td>
+                                <td class="text-end">{{ stats.info_issues }}</td>
+                                <td class="text-end">
+                                    {% if total_for_percent > 0 %}
+                                        {{ "%.1f"|format((stats.info_issues / total_for_percent) * 100) }}%
+                                    {% else %}
+                                        0.0%
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        </tbody>
+                        <tfoot class="table-light">
+                            <tr class="fw-bold">
+                                <td>Total</td>
+                                <td class="text-end">{{ total_for_percent }}</td>
+                                <td class="text-end">100.0%</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity & Top Issues -->
+<div class="row">
+    <!-- Recent Scans -->
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-clock-history me-2"></i>
+                    Recent Scans
+                </h5>
+                <a href="{{ url_for('upload') }}" class="btn btn-sm btn-outline-primary">
+                    View All
+                </a>
+            </div>
+            <div class="card-body p-0">
+                {% if recent_scans %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Scan File</th>
+                                    <th class="text-center">Hosts</th>
+                                    <th class="text-center">Issues</th>
+                                    <th class="text-center">Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for scan in recent_scans %}
+                                    <tr>
+                                        <td>
+                                            <div>
+                                                <i class="bi bi-file-earmark-text text-primary me-2"></i>
+                                                <strong>{{ scan.filename|truncate(25) }}</strong>
+                                            </div>
+                                            {% if scan.scanner_name %}
+                                                <small class="text-muted">{{ scan.scanner_name }}</small>
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-center">
+                                            <span class="badge bg-info">{{ scan.total_hosts }}</span>
+                                        </td>
+                                        <td class="text-center">
+                                            <span class="badge bg-warning text-dark">{{ scan.total_issues }}</span>
+                                        </td>
+                                        <td class="text-center">
+                                            <small class="text-muted">
+                                                {% if scan.upload_date %}
+                                                    {{ scan.upload_date[:16].replace('T', ' ') if 'T' in scan.upload_date else scan.upload_date }}
+                                                {% else %}
+                                                    N/A
+                                                {% endif %}
+                                            </small>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-inbox display-1 text-muted mb-3"></i>
+                        <h5 class="text-muted">No scans uploaded yet</h5>
+                        <p class="text-muted">Upload your first Nessus scan to see results here</p>
+                        <a href="{{ url_for('upload') }}" class="btn btn-primary">
+                            <i class="bi bi-upload me-2"></i>
+                            Upload Scan
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Top Issues -->
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    Top Issues by Host Count
+                </h5>
+                <a href="{{ url_for('issues') }}" class="btn btn-sm btn-outline-primary">
+                    View All
+                </a>
+            </div>
+            <div class="card-body p-0">
+                {% if top_issues %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Issue</th>
+                                    <th class="text-center">Severity</th>
+                                    <th class="text-center">Hosts</th>
+                                    <th class="text-center">CVSS</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for issue in top_issues %}
+                                    <tr>
+                                        <td>
+                                            <div class="fw-bold">{{ issue.plugin_name|truncate(40) }}</div>
+                                        </td>
+                                        <td class="text-center">
+                                            <span class="badge severity-{{ issue.severity.lower() }}">
+                                                {{ issue.severity }}
+                                            </span>
+                                        </td>
+                                        <td class="text-center">
+                                            <span class="badge bg-secondary">{{ issue.affected_hosts }}</span>
+                                        </td>
+                                        <td class="text-center">
+                                            {% if issue.cvss3_score > 0 %}
+                                                <span class="fw-bold 
+                                                    {% if issue.cvss3_score >= 9.0 %}text-danger
+                                                    {% elif issue.cvss3_score >= 7.0 %}text-warning
+                                                    {% elif issue.cvss3_score >= 4.0 %}text-info
+                                                    {% else %}text-success{% endif %}">
+                                                    {{ "%.1f"|format(issue.cvss3_score) }}
+                                                </span>
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-shield-check display-1 text-success mb-3"></i>
+                        <h5 class="text-muted">No issues found</h5>
+                        <p class="text-muted">Upload scans to see vulnerability analysis</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Action Buttons -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body text-center py-4">
+                <h5 class="mb-3">Quick Actions</h5>
+                <div class="btn-group" role="group">
+                    <a href="{{ url_for('upload') }}" class="btn btn-primary">
+                        <i class="bi bi-cloud-upload me-2"></i>
+                        Upload New Scan
+                    </a>
+                    <a href="{{ url_for('hosts') }}" class="btn btn-outline-primary">
+                        <i class="bi bi-pc-display me-2"></i>
+                        View Hosts
+                    </a>
+                    <a href="{{ url_for('issues') }}" class="btn btn-outline-warning">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        View All Issues
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize severity distribution chart
+        initSeverityChart();
+    });
+    
+    function initSeverityChart() {
+        const ctx = document.getElementById('severityChart').getContext('2d');
+        
+        const data = {
+            labels: ['Critical', 'High', 'Medium', 'Low', 'Info'],
+            datasets: [{
+                data: [
+                    {{ stats.critical_issues }},
+                    {{ stats.high_issues }},
+                    {{ stats.medium_issues }},
+                    {{ stats.low_issues }},
+                    {{ stats.info_issues }}
+                ],
+                backgroundColor: [
+                    '#dc3545',  // Critical - Red
+                    '#fd7e14',  // High - Orange
+                    '#ffc107',  // Medium - Yellow
+                    '#198754',  // Low - Green
+                    '#0dcaf0'   // Info - Cyan
+                ],
+                borderColor: '#ffffff',
+                borderWidth: 2
+            }]
+        };
+        
+        const config = {
+            type: 'doughnut',
+            data: data,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            padding: 20,
+                            usePointStyle: true
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = total > 0 ? ((context.parsed / total) * 100).toFixed(1) : 0;
+                                return context.label + ': ' + context.parsed + ' (' + percentage + '%)';
+                            }
+                        }
+                    }
+                }
+            }
+        };
+        
+        new Chart(ctx, config);
+    }
+    
+    function refreshDashboard() {
+        location.reload();
+    }
+</script>
+{% endblock %}

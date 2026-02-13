@@ -1,0 +1,493 @@
+{% extends "base.html" %}
+
+{% block title %}Issues - Nessus Web Application{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2>
+                    <i class="bi bi-exclamation-triangle text-warning me-2"></i>
+                    Vulnerability Issues
+                </h2>
+                <p class="text-muted mb-0">Comprehensive view of all identified security vulnerabilities</p>
+            </div>
+            <div>
+                <button class="btn btn-outline-secondary btn-sm" onclick="toggleFilters()">
+                    <i class="bi bi-funnel me-1"></i>
+                    Filters
+                </button>
+                <button class="btn btn-outline-info btn-sm" onclick="exportResults()">
+                    <i class="bi bi-download me-1"></i>
+                    Export
+                </button>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-outline-primary btn-sm">
+                    <i class="bi bi-speedometer2 me-1"></i>
+                    Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters Section -->
+<div class="row mb-4 d-none" id="filtersSection">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-funnel me-2"></i>
+                    Filter Issues
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-2">
+                        <label for="severityFilter" class="form-label">Severity</label>
+                        <select class="form-select" id="severityFilter" onchange="filterIssues()">
+                            <option value="">All Severities</option>
+                            <option value="Critical">Critical</option>
+                            <option value="High">High</option>
+                            <option value="Medium">Medium</option>
+                            <option value="Low">Low</option>
+                            <option value="Info">Info</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="cvssFilter" class="form-label">Min CVSS</label>
+                        <select class="form-select" id="cvssFilter" onchange="filterIssues()">
+                            <option value="">Any Score</option>
+                            <option value="9.0">9.0+ (Critical)</option>
+                            <option value="7.0">7.0+ (High)</option>
+                            <option value="4.0">4.0+ (Medium)</option>
+                            <option value="0.1">0.1+ (Any)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="hostCountFilter" class="form-label">Min Host Count</label>
+                        <input type="number" class="form-control" id="hostCountFilter" min="1" placeholder="1+" oninput="filterIssues()">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="scanFilter" class="form-label">Scan Source</label>
+                        <select class="form-select" id="scanFilter" onchange="filterIssues()">
+                            <option value="">All Scans</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="searchFilter" class="form-label">Search</label>
+                        <input type="text" class="form-control" id="searchFilter" placeholder="Plugin name, CVE, or description" oninput="filterIssues()">
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <button class="btn btn-secondary btn-sm" onclick="clearFilters()">
+                            <i class="bi bi-x-circle me-1"></i>
+                            Clear Filters
+                        </button>
+                        <span class="text-muted ms-3">
+                            <span id="filteredCount">{{ issues|length }}</span> of {{ issues|length }} issues shown
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Issue Summary Stats -->
+<div class="row mb-4">
+    <div class="col-lg-2 col-md-4 col-6 mb-3">
+        <div class="card severity-critical text-center">
+            <div class="card-body py-3">
+                <i class="bi bi-exclamation-octagon display-6 mb-2"></i>
+                <h3 class="mb-0">{{ issues|selectattr('severity', 'equalto', 'Critical')|list|length }}</h3>
+                <small>Critical</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-2 col-md-4 col-6 mb-3">
+        <div class="card severity-high text-center">
+            <div class="card-body py-3">
+                <i class="bi bi-exclamation-triangle display-6 mb-2"></i>
+                <h3 class="mb-0">{{ issues|selectattr('severity', 'equalto', 'High')|list|length }}</h3>
+                <small>High</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-2 col-md-4 col-6 mb-3">
+        <div class="card severity-medium text-center">
+            <div class="card-body py-3">
+                <i class="bi bi-exclamation-circle display-6 mb-2"></i>
+                <h3 class="mb-0">{{ issues|selectattr('severity', 'equalto', 'Medium')|list|length }}</h3>
+                <small>Medium</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-2 col-md-4 col-6 mb-3">
+        <div class="card severity-low text-center">
+            <div class="card-body py-3">
+                <i class="bi bi-info-circle display-6 mb-2"></i>
+                <h3 class="mb-0">{{ issues|selectattr('severity', 'equalto', 'Low')|list|length }}</h3>
+                <small>Low</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-2 col-md-4 col-6 mb-3">
+        <div class="card severity-info text-center">
+            <div class="card-body py-3">
+                <i class="bi bi-info-square display-6 mb-2"></i>
+                <h3 class="mb-0">{{ issues|selectattr('severity', 'equalto', 'Info')|list|length }}</h3>
+                <small>Info</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-2 col-md-4 col-6 mb-3">
+        <div class="card bg-primary text-white text-center">
+            <div class="card-body py-3">
+                <i class="bi bi-list-check display-6 mb-2"></i>
+                <h3 class="mb-0">{{ issues|length }}</h3>
+                <small>Total</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Issues Table -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-list me-2"></i>
+                    All Security Issues
+                </h5>
+            </div>
+            <div class="card-body p-0">
+                {% if issues %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0" id="issuesTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 40%">
+                                        <i class="bi bi-bug me-1"></i>
+                                        Vulnerability
+                                    </th>
+                                    <th class="text-center" style="width: 10%">
+                                        <i class="bi bi-shield-exclamation me-1"></i>
+                                        Severity
+                                    </th>
+                                    <th class="text-center" style="width: 10%">
+                                        <i class="bi bi-speedometer me-1"></i>
+                                        CVSS
+                                    </th>
+                                    <th class="text-center" style="width: 10%">
+                                        <i class="bi bi-pc-display me-1"></i>
+                                        Hosts
+                                    </th>
+                                    <th class="text-center" style="width: 15%">
+                                        <i class="bi bi-file-earmark-text me-1"></i>
+                                        Source
+                                    </th>
+                                    <th class="text-center" style="width: 15%">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for issue in issues %}
+                                    <tr class="issue-row issue-card" 
+                                        data-severity="{{ issue.severity }}"
+                                        data-cvss="{{ issue.cvss3_score or 0 }}"
+                                        data-hosts="{{ issue.affected_hosts }}"
+                                        data-scan="{{ issue.filename }}">
+                                        <td>
+                                            <div>
+                                                <strong class="text-primary">{{ issue.plugin_name|truncate(60) }}</strong>
+                                                {% if issue.cve %}
+                                                    <br>
+                                                    <small class="text-muted">
+                                                        <i class="bi bi-shield-check me-1"></i>
+                                                        {% set cves = issue.cve.split(',') %}
+                                                        {% if cves|length > 3 %}
+                                                            {{ cves[:3]|join(', ')|trim }} +{{ cves|length - 3 }} more
+                                                        {% else %}
+                                                            {{ issue.cve }}
+                                                        {% endif %}
+                                                    </small>
+                                                {% endif %}
+                                            </div>
+                                            <small class="text-muted">
+                                                <i class="bi bi-hash me-1"></i>
+                                                Plugin {{ issue.plugin_id }}
+                                            </small>
+                                        </td>
+                                        
+                                        <td class="text-center">
+                                            <span class="badge severity-{{ issue.severity.lower() }}">
+                                                {{ issue.severity }}
+                                            </span>
+                                        </td>
+                                        
+                                        <td class="text-center">
+                                            {% if issue.cvss3_score > 0 %}
+                                                <span class="fw-bold 
+                                                    {% if issue.cvss3_score >= 9.0 %}text-danger
+                                                    {% elif issue.cvss3_score >= 7.0 %}text-warning
+                                                    {% elif issue.cvss3_score >= 4.0 %}text-info
+                                                    {% else %}text-success{% endif %}">
+                                                    {{ "%.1f"|format(issue.cvss3_score) }}
+                                                </span>
+                                            {% elif issue.cvss_score > 0 %}
+                                                <span class="fw-bold text-muted">
+                                                    {{ "%.1f"|format(issue.cvss_score) }}
+                                                    <small>(v2)</small>
+                                                </span>
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        
+                                        <td class="text-center">
+                                            <span class="badge 
+                                                {% if issue.affected_hosts >= 10 %}bg-danger
+                                                {% elif issue.affected_hosts >= 5 %}bg-warning
+                                                {% elif issue.affected_hosts >= 2 %}bg-info
+                                                {% else %}bg-secondary{% endif %}">
+                                                {{ issue.affected_hosts }}
+                                            </span>
+                                        </td>
+                                        
+                                        <td class="text-center">
+                                            <small class="text-muted">
+                                                <i class="bi bi-file-earmark-text me-1"></i>
+                                                {{ issue.filename|truncate(20) if issue.filename else 'Unknown' }}
+                                            </small>
+                                        </td>
+                                        
+                                        <td class="text-center">
+                                            <div class="btn-group btn-group-sm" role="group">
+                                                <a href="{{ url_for('issue_detail', issue_id=issue.id) }}" 
+                                                   class="btn btn-outline-primary btn-sm" 
+                                                   title="View issue details">
+                                                    <i class="bi bi-eye"></i>
+                                                    Details
+                                                </a>
+                                                <button class="btn btn-outline-info btn-sm" 
+                                                        onclick="quickView({{ issue.id }})" 
+                                                        title="Quick view">
+                                                    <i class="bi bi-eye-fill"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-shield-check display-1 text-success mb-3"></i>
+                        <h5 class="text-muted">No Issues Found</h5>
+                        <p class="text-muted">Upload Nessus scans to see vulnerability analysis</p>
+                        <a href="{{ url_for('upload') }}" class="btn btn-primary">
+                            <i class="bi bi-cloud-upload me-2"></i>
+                            Upload Scan
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick View Modal -->
+<div class="modal fade" id="quickViewModal" tabindex="-1" aria-labelledby="quickViewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="quickViewModalLabel">Vulnerability Quick View</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="quickViewContent">
+                <div class="text-center py-4">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <a href="#" class="btn btn-primary" id="quickViewDetailsBtn">View Full Details</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let quickViewModal;
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        populateFilterOptions();
+        quickViewModal = new bootstrap.Modal(document.getElementById('quickViewModal'));
+    });
+    
+    function toggleFilters() {
+        const filtersSection = document.getElementById('filtersSection');
+        filtersSection.classList.toggle('d-none');
+    }
+    
+    function populateFilterOptions() {
+        const issueRows = document.querySelectorAll('.issue-row');
+        const scanFilter = document.getElementById('scanFilter');
+        
+        // Collect unique scan sources
+        const scanSet = new Set();
+        
+        issueRows.forEach(row => {
+            const scan = row.dataset.scan;
+            if (scan && scan.trim()) {
+                scanSet.add(scan.trim());
+            }
+        });
+        
+        // Populate scan filter
+        Array.from(scanSet).sort().forEach(scan => {
+            const option = document.createElement('option');
+            option.value = scan;
+            option.textContent = scan.length > 30 ? scan.substring(0, 30) + '...' : scan;
+            scanFilter.appendChild(option);
+        });
+    }
+    
+    function filterIssues() {
+        const severityFilter = document.getElementById('severityFilter').value;
+        const cvssFilter = parseFloat(document.getElementById('cvssFilter').value) || 0;
+        const hostCountFilter = parseInt(document.getElementById('hostCountFilter').value) || 0;
+        const scanFilter = document.getElementById('scanFilter').value;
+        const searchFilter = document.getElementById('searchFilter').value.toLowerCase();
+        const issueRows = document.querySelectorAll('.issue-row');
+        
+        let visibleCount = 0;
+        
+        issueRows.forEach(row => {
+            let showRow = true;
+            
+            // Severity filter
+            if (severityFilter && row.dataset.severity !== severityFilter) {
+                showRow = false;
+            }
+            
+            // CVSS filter
+            if (showRow && cvssFilter > 0) {
+                const cvss = parseFloat(row.dataset.cvss) || 0;
+                showRow = cvss >= cvssFilter;
+            }
+            
+            // Host count filter
+            if (showRow && hostCountFilter > 0) {
+                const hostCount = parseInt(row.dataset.hosts) || 0;
+                showRow = hostCount >= hostCountFilter;
+            }
+            
+            // Scan filter
+            if (showRow && scanFilter) {
+                showRow = row.dataset.scan === scanFilter;
+            }
+            
+            // Search filter
+            if (showRow && searchFilter) {
+                const rowText = row.textContent.toLowerCase();
+                showRow = rowText.includes(searchFilter);
+            }
+            
+            // Show/hide row
+            if (showRow) {
+                row.style.display = '';
+                visibleCount++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+        
+        // Update filtered count
+        document.getElementById('filteredCount').textContent = visibleCount;
+    }
+    
+    function clearFilters() {
+        document.getElementById('severityFilter').value = '';
+        document.getElementById('cvssFilter').value = '';
+        document.getElementById('hostCountFilter').value = '';
+        document.getElementById('scanFilter').value = '';
+        document.getElementById('searchFilter').value = '';
+        
+        const issueRows = document.querySelectorAll('.issue-row');
+        issueRows.forEach(row => {
+            row.style.display = '';
+        });
+        
+        document.getElementById('filteredCount').textContent = issueRows.length;
+    }
+    
+    function quickView(issueId) {
+        // Show modal
+        quickViewModal.show();
+        
+        // Update details button
+        const detailsBtn = document.getElementById('quickViewDetailsBtn');
+        detailsBtn.href = `/issue/${issueId}`;
+        
+        // Find the issue row for basic info
+        const issueRow = document.querySelector(`[data-issue-id="${issueId}"]`);
+        const quickViewContent = document.getElementById('quickViewContent');
+        
+        // For now, show a placeholder. In a real implementation, you'd fetch via AJAX
+        quickViewContent.innerHTML = `
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i>
+                <strong>Quick View:</strong> This feature would show a summary of the vulnerability details.
+                Click "View Full Details" to see the complete information.
+            </div>
+            <p class="text-muted">This modal could display:</p>
+            <ul class="text-muted">
+                <li>Vulnerability summary</li>
+                <li>Affected hosts preview</li>
+                <li>Basic remediation steps</li>
+                <li>CVSS score breakdown</li>
+            </ul>
+        `;
+    }
+    
+    function exportResults() {
+        // Simple CSV export functionality
+        const visibleRows = document.querySelectorAll('.issue-row[style=""], .issue-row:not([style])');
+        let csvContent = "Plugin Name,Severity,CVSS Score,Affected Hosts,Plugin ID,Scan Source\n";
+        
+        visibleRows.forEach(row => {
+            const cells = row.querySelectorAll('td');
+            const pluginName = cells[0].querySelector('strong').textContent.trim();
+            const severity = row.dataset.severity;
+            const cvss = row.dataset.cvss;
+            const hosts = row.dataset.hosts;
+            const pluginId = cells[0].textContent.match(/Plugin (\d+)/)?.[1] || '';
+            const scanSource = row.dataset.scan;
+            
+            csvContent += `"${pluginName}","${severity}","${cvss}","${hosts}","${pluginId}","${scanSource}"\n`;
+        });
+        
+        // Download CSV
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `nessus-issues-${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,499 @@
+{% extends "base.html" %}
+
+{% block title %}{{ issue.plugin_name }} - Issue Details{% endblock %}
+
+{% block content %}
+<!-- Issue Header -->
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2>
+                    <span class="badge severity-{{ issue.severity.lower() }} me-3">{{ issue.severity }}</span>
+                    {{ issue.plugin_name|truncate(60) }}
+                </h2>
+                <p class="text-muted mb-0">
+                    Plugin {{ issue.plugin_id }} • Affects {{ issue.affected_hosts }} host{{ 's' if issue.affected_hosts != 1 else '' }}
+                </p>
+            </div>
+            <div>
+                <a href="{{ url_for('issues') }}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-arrow-left me-1"></i>
+                    Back to Issues
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Issue Summary Cards -->
+<div class="row mb-4">
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card severity-{{ issue.severity.lower() }} text-center">
+            <div class="card-body">
+                <i class="bi bi-shield-exclamation display-5 mb-2"></i>
+                <h4 class="mb-0">{{ issue.severity }}</h4>
+                <small>Severity Level</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card bg-info text-white text-center">
+            <div class="card-body">
+                <i class="bi bi-speedometer display-5 mb-2"></i>
+                <h4 class="mb-0">
+                    {% if issue.cvss3_score > 0 %}
+                        {{ "%.1f"|format(issue.cvss3_score) }}
+                    {% elif issue.cvss_score > 0 %}
+                        {{ "%.1f"|format(issue.cvss_score) }}
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </h4>
+                <small>
+                    {% if issue.cvss3_score > 0 %}
+                        CVSS v3.0 Score
+                    {% elif issue.cvss_score > 0 %}
+                        CVSS v2.0 Score
+                    {% else %}
+                        No CVSS Score
+                    {% endif %}
+                </small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card bg-warning text-dark text-center">
+            <div class="card-body">
+                <i class="bi bi-pc-display display-5 mb-2"></i>
+                <h4 class="mb-0">{{ issue.affected_hosts }}</h4>
+                <small>Affected Host{{ 's' if issue.affected_hosts != 1 else '' }}</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card bg-secondary text-white text-center">
+            <div class="card-body">
+                <i class="bi bi-hash display-5 mb-2"></i>
+                <h4 class="mb-0">{{ issue.plugin_id }}</h4>
+                <small>Plugin ID</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Issue Details -->
+<div class="row mb-4">
+    <div class="col-lg-8">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-file-text me-2"></i>
+                    Vulnerability Description
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if issue.description %}
+                    <div class="mb-4">
+                        <h6>Description</h6>
+                        <p class="text-muted">{{ issue.description }}</p>
+                    </div>
+                {% endif %}
+                
+                {% if issue.solution %}
+                    <div class="mb-4">
+                        <h6 class="text-success">
+                            <i class="bi bi-tools me-2"></i>
+                            Recommended Solution
+                        </h6>
+                        <div class="alert alert-success">
+                            <p class="mb-0">{{ issue.solution }}</p>
+                        </div>
+                    </div>
+                {% endif %}
+                
+                {% if issue.see_also %}
+                    <div class="mb-4">
+                        <h6>
+                            <i class="bi bi-link-45deg me-2"></i>
+                            References
+                        </h6>
+                        <div class="bg-light p-3 rounded">
+                            {% for ref in issue.see_also.split('\n') %}
+                                {% if ref.strip() %}
+                                    {% if ref.startswith('http') %}
+                                        <a href="{{ ref.strip() }}" target="_blank" class="d-block mb-1">
+                                            <i class="bi bi-box-arrow-up-right me-1"></i>
+                                            {{ ref.strip()|truncate(80) }}
+                                        </a>
+                                    {% else %}
+                                        <p class="mb-1 small">{{ ref.strip() }}</p>
+                                    {% endif %}
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Technical Information Sidebar -->
+    <div class="col-lg-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-gear me-2"></i>
+                    Technical Information
+                </h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm table-borderless">
+                    <tr>
+                        <td><strong>Plugin ID:</strong></td>
+                        <td>{{ issue.plugin_id }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Severity:</strong></td>
+                        <td>
+                            <span class="badge severity-{{ issue.severity.lower() }}">
+                                {{ issue.severity }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% if issue.risk_factor %}
+                        <tr>
+                            <td><strong>Risk Factor:</strong></td>
+                            <td>{{ issue.risk_factor }}</td>
+                        </tr>
+                    {% endif %}
+                    {% if issue.cvss3_score > 0 %}
+                        <tr>
+                            <td><strong>CVSS v3 Score:</strong></td>
+                            <td>
+                                <span class="fw-bold 
+                                    {% if issue.cvss3_score >= 9.0 %}text-danger
+                                    {% elif issue.cvss3_score >= 7.0 %}text-warning
+                                    {% elif issue.cvss3_score >= 4.0 %}text-info
+                                    {% else %}text-success{% endif %}">
+                                    {{ "%.1f"|format(issue.cvss3_score) }}
+                                </span>
+                            </td>
+                        </tr>
+                    {% endif %}
+                    {% if issue.cvss_score > 0 %}
+                        <tr>
+                            <td><strong>CVSS v2 Score:</strong></td>
+                            <td>{{ "%.1f"|format(issue.cvss_score) }}</td>
+                        </tr>
+                    {% endif %}
+                    <tr>
+                        <td><strong>Affected Hosts:</strong></td>
+                        <td>
+                            <span class="badge 
+                                {% if issue.affected_hosts >= 10 %}bg-danger
+                                {% elif issue.affected_hosts >= 5 %}bg-warning
+                                {% elif issue.affected_hosts >= 2 %}bg-info
+                                {% else %}bg-secondary{% endif %}">
+                                {{ issue.affected_hosts }}
+                            </span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><strong>Scan Source:</strong></td>
+                        <td>
+                            <small class="text-muted">{{ issue.filename if issue.filename else 'Unknown' }}</small>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><strong>Scanner:</strong></td>
+                        <td>
+                            <small class="text-muted">{{ issue.scanner_name if issue.scanner_name else 'Unknown' }}</small>
+                        </td>
+                    </tr>
+                </table>
+                
+                {% if issue.cve %}
+                    <div class="mt-4">
+                        <h6>CVE References</h6>
+                        <div class="mb-3">
+                            {% for cve in issue.cve.split(',') %}
+                                {% set cve_clean = cve.strip() %}
+                                <a href="https://cve.mitre.org/cgi-bin/cvename.cgi?name={{ cve_clean }}" 
+                                   target="_blank" 
+                                   class="badge bg-info text-decoration-none me-1 mb-1">
+                                    <i class="bi bi-box-arrow-up-right me-1"></i>
+                                    {{ cve_clean }}
+                                </a>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Affected Hosts -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-pc-display me-2"></i>
+                    Affected Hosts ({{ affected_hosts|length }})
+                </h5>
+                <div>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="toggleHostDetails()">
+                        <i class="bi bi-list-ul me-1"></i>
+                        Toggle Details
+                    </button>
+                    <button class="btn btn-outline-info btn-sm" onclick="exportHosts()">
+                        <i class="bi bi-download me-1"></i>
+                        Export
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                {% if affected_hosts %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0" id="affectedHostsTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>
+                                        <i class="bi bi-pc-display me-1"></i>
+                                        Host
+                                    </th>
+                                    <th class="text-center">
+                                        <i class="bi bi-ethernet me-1"></i>
+                                        Port/Protocol
+                                    </th>
+                                    <th class="text-center">
+                                        <i class="bi bi-gear me-1"></i>
+                                        Service
+                                    </th>
+                                    <th class="text-center">
+                                        <i class="bi bi-gear me-1"></i>
+                                        Operating System
+                                    </th>
+                                    <th class="text-center">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for host in affected_hosts %}
+                                    <tr class="host-row">
+                                        <td>
+                                            <div>
+                                                <strong class="text-primary">{{ host.host_ip }}</strong>
+                                                {% if host.host_fqdn %}
+                                                    <br><small class="text-muted">{{ host.host_fqdn|truncate(40) }}</small>
+                                                {% endif %}
+                                            </div>
+                                        </td>
+                                        
+                                        <td class="text-center">
+                                            {% if host.port %}
+                                                <code>{{ host.port }}{% if host.protocol %}/{{ host.protocol }}{% endif %}</code>
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        
+                                        <td class="text-center">
+                                            {% if host.service_name %}
+                                                <span class="badge bg-secondary">{{ host.service_name }}</span>
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        
+                                        <td class="text-center">
+                                            {% if host.operating_system %}
+                                                <span class="badge bg-info" title="{{ host.operating_system }}">
+                                                    {% if 'Windows' in host.operating_system %}
+                                                        <i class="bi bi-windows"></i> Win
+                                                    {% elif 'Linux' in host.operating_system %}
+                                                        <i class="bi bi-ubuntu"></i> Linux
+                                                    {% elif 'Unix' in host.operating_system %}
+                                                        <i class="bi bi-terminal"></i> Unix
+                                                    {% else %}
+                                                        <i class="bi bi-question-circle"></i> Other
+                                                    {% endif %}
+                                                </span>
+                                            {% else %}
+                                                <span class="text-muted">Unknown</span>
+                                            {% endif %}
+                                        </td>
+                                        
+                                        <td class="text-center">
+                                            <a href="{{ url_for('host_detail', host_id=host.host_id) }}" 
+                                               class="btn btn-sm btn-outline-primary" 
+                                               title="View host details">
+                                                <i class="bi bi-eye"></i>
+                                                Host Details
+                                            </a>
+                                        </td>
+                                    </tr>
+                                    
+                                    <!-- Plugin Output Row (Initially Hidden) -->
+                                    {% if host.plugin_output %}
+                                        <tr class="plugin-output-row d-none">
+                                            <td colspan="5">
+                                                <div class="bg-light p-3 mx-3 rounded">
+                                                    <h6 class="mb-2">
+                                                        <i class="bi bi-terminal me-2"></i>
+                                                        Scan Output for {{ host.host_ip }}
+                                                    </h6>
+                                                    <pre class="mb-0 small text-wrap">{{ host.plugin_output }}</pre>
+                                                    {% if host.plugin_output|length > 2500 %}
+                                                        <div class="mt-2">
+                                                            <small class="text-muted">
+                                                                <i class="bi bi-info-circle me-1"></i>
+                                                                This vulnerability produces extensive output. Key information like affected versions, file paths, and configuration details are included above.
+                                                            </small>
+                                                        </div>
+                                                    {% endif %}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    {% endif %}
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-pc-display display-1 text-muted mb-3"></i>
+                        <h5 class="text-muted">No Affected Hosts</h5>
+                        <p class="text-muted">This vulnerability was not found on any hosts</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Action Buttons -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body text-center py-4">
+                <h6 class="mb-3">Quick Actions</h6>
+                <div class="btn-group" role="group">
+                    <a href="{{ url_for('issues') }}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left me-2"></i>
+                        Back to All Issues
+                    </a>
+                    <a href="{{ url_for('hosts') }}" class="btn btn-outline-primary">
+                        <i class="bi bi-pc-display me-2"></i>
+                        View All Hosts
+                    </a>
+                    <button class="btn btn-outline-info" onclick="exportIssueReport()">
+                        <i class="bi bi-download me-2"></i>
+                        Export Report
+                    </button>
+                    {% if issue.cve %}
+                        <a href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&results_type=overview&search_type=all&cve_id={{ issue.cve.split(',')[0].strip() }}" 
+                           target="_blank" 
+                           class="btn btn-outline-warning">
+                            <i class="bi bi-shield-check me-2"></i>
+                            NVD Lookup
+                        </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function toggleHostDetails() {
+        const outputRows = document.querySelectorAll('.plugin-output-row');
+        const isVisible = Array.from(outputRows).some(row => !row.classList.contains('d-none'));
+        
+        outputRows.forEach(row => {
+            if (isVisible) {
+                row.classList.add('d-none');
+            } else {
+                row.classList.remove('d-none');
+            }
+        });
+    }
+    
+    function exportHosts() {
+        const hostRows = document.querySelectorAll('.host-row');
+        let csvContent = "Host IP,FQDN,Port,Protocol,Service,Operating System\n";
+        
+        hostRows.forEach(row => {
+            const cells = row.querySelectorAll('td');
+            const hostIp = cells[0].querySelector('strong').textContent.trim();
+            const fqdn = cells[0].querySelector('small') ? cells[0].querySelector('small').textContent.trim() : '';
+            const port = cells[1].querySelector('code') ? cells[1].querySelector('code').textContent.trim() : '';
+            const service = cells[2].querySelector('.badge') ? cells[2].querySelector('.badge').textContent.trim() : '';
+            const os = cells[3].querySelector('.badge') ? cells[3].title || cells[3].textContent.trim() : '';
+            
+            const [portNum, protocol] = port.includes('/') ? port.split('/') : [port, ''];
+            
+            csvContent += `"${hostIp}","${fqdn}","${portNum}","${protocol}","${service}","${os}"\n`;
+        });
+        
+        // Download CSV
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `affected-hosts-plugin-{{ issue.plugin_id }}-${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+    }
+    
+    function exportIssueReport() {
+        // Create a comprehensive report
+        const reportContent = `
+VULNERABILITY REPORT
+===================
+
+Plugin Name: {{ issue.plugin_name }}
+Plugin ID: {{ issue.plugin_id }}
+Severity: {{ issue.severity }}
+{% if issue.cvss3_score > 0 %}CVSS v3 Score: {{ "%.1f"|format(issue.cvss3_score) }}{% endif %}
+{% if issue.cvss_score > 0 %}CVSS v2 Score: {{ "%.1f"|format(issue.cvss_score) }}{% endif %}
+Affected Hosts: {{ issue.affected_hosts }}
+
+Description:
+{{ issue.description or 'No description available.' }}
+
+{% if issue.solution %}
+Solution:
+{{ issue.solution }}
+{% endif %}
+
+{% if issue.cve %}
+CVE References:
+{{ issue.cve }}
+{% endif %}
+
+Affected Hosts:
+{% for host in affected_hosts %}
+- {{ host.host_ip }}{% if host.host_fqdn %} ({{ host.host_fqdn }}){% endif %}{% if host.port %} - Port {{ host.port }}{% if host.protocol %}/{{ host.protocol }}{% endif %}{% endif %}{% if host.service_name %} ({{ host.service_name }}){% endif %}
+{% endfor %}
+
+Generated: ${new Date().toISOString()}
+        `.trim();
+        
+        // Download as text file
+        const blob = new Blob([reportContent], { type: 'text/plain' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `vulnerability-report-{{ issue.plugin_id }}-${new Date().toISOString().split('T')[0]}.txt`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+    }
+</script>
+{% endblock %}

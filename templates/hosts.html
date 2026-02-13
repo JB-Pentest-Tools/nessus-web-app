@@ -1,0 +1,405 @@
+{% extends "base.html" %}
+
+{% block title %}Hosts - Nessus Web Application{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2>
+                    <i class="bi bi-pc-display text-primary me-2"></i>
+                    Host Analysis
+                </h2>
+                <p class="text-muted mb-0">Detailed view of scanned hosts and their vulnerabilities</p>
+            </div>
+            <div>
+                <button class="btn btn-outline-secondary btn-sm" onclick="toggleFilters()">
+                    <i class="bi bi-funnel me-1"></i>
+                    Filters
+                </button>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-outline-primary btn-sm">
+                    <i class="bi bi-speedometer2 me-1"></i>
+                    Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters Section -->
+<div class="row mb-4 d-none" id="filtersSection">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-funnel me-2"></i>
+                    Filter Hosts
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <label for="severityFilter" class="form-label">Minimum Severity</label>
+                        <select class="form-select" id="severityFilter" onchange="filterHosts()">
+                            <option value="">All Severities</option>
+                            <option value="critical">Critical+</option>
+                            <option value="high">High+</option>
+                            <option value="medium">Medium+</option>
+                            <option value="low">Low+</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="osFilter" class="form-label">Operating System</label>
+                        <select class="form-select" id="osFilter" onchange="filterHosts()">
+                            <option value="">All Operating Systems</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="scanFilter" class="form-label">Scan File</label>
+                        <select class="form-select" id="scanFilter" onchange="filterHosts()">
+                            <option value="">All Scans</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="searchFilter" class="form-label">Search</label>
+                        <input type="text" class="form-control" id="searchFilter" placeholder="IP, FQDN, or hostname" oninput="filterHosts()">
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <button class="btn btn-secondary btn-sm" onclick="clearFilters()">
+                            <i class="bi bi-x-circle me-1"></i>
+                            Clear Filters
+                        </button>
+                        <span class="text-muted ms-3">
+                            <span id="filteredCount">{{ hosts|length }}</span> of {{ hosts|length }} hosts shown
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Hosts Summary Stats -->
+<div class="row mb-4">
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card bg-info text-white">
+            <div class="card-body text-center">
+                <i class="bi bi-pc-display display-6 mb-2"></i>
+                <h3 class="mb-0">{{ hosts|length }}</h3>
+                <small>Total Hosts</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card bg-danger text-white">
+            <div class="card-body text-center">
+                <i class="bi bi-shield-exclamation display-6 mb-2"></i>
+                <h3 class="mb-0">{{ hosts|selectattr('critical_issues', '>', 0)|list|length }}</h3>
+                <small>Critical Hosts</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card bg-warning text-dark">
+            <div class="card-body text-center">
+                <i class="bi bi-exclamation-triangle display-6 mb-2"></i>
+                <h3 class="mb-0">{{ hosts|selectattr('high_issues', '>', 0)|list|length }}</h3>
+                <small>High Risk Hosts</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card bg-success text-white">
+            <div class="card-body text-center">
+                <i class="bi bi-shield-check display-6 mb-2"></i>
+                <h3 class="mb-0">{{ hosts|selectattr('critical_issues', '==', 0)|selectattr('high_issues', '==', 0)|list|length }}</h3>
+                <small>Low Risk Hosts</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Hosts Table -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-list me-2"></i>
+                    Host Details
+                </h5>
+            </div>
+            <div class="card-body p-0">
+                {% if hosts %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0" id="hostsTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>
+                                        <i class="bi bi-pc-display me-1"></i>
+                                        Host
+                                    </th>
+                                    <th class="text-center">
+                                        <i class="bi bi-gear me-1"></i>
+                                        OS
+                                    </th>
+                                    <th class="text-center">
+                                        <i class="bi bi-exclamation-octagon me-1"></i>
+                                        Critical
+                                    </th>
+                                    <th class="text-center">
+                                        <i class="bi bi-exclamation-triangle me-1"></i>
+                                        High
+                                    </th>
+                                    <th class="text-center">
+                                        <i class="bi bi-exclamation-circle me-1"></i>
+                                        Medium
+                                    </th>
+                                    <th class="text-center">
+                                        <i class="bi bi-info-circle me-1"></i>
+                                        Low
+                                    </th>
+                                    <th class="text-center">Total</th>
+                                    <th class="text-center">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for host in hosts %}
+                                    <tr class="host-row host-card" 
+                                        data-os="{{ host.operating_system or '' }}" 
+                                        data-scan="{{ host.filename }}"
+                                        data-critical="{{ host.critical_issues }}"
+                                        data-high="{{ host.high_issues }}"
+                                        data-medium="{{ host.medium_issues }}"
+                                        data-low="{{ host.low_issues }}">
+                                        <td>
+                                            <div>
+                                                <strong class="text-primary">{{ host.host_ip }}</strong>
+                                                {% if host.host_fqdn %}
+                                                    <br><small class="text-muted">{{ host.host_fqdn|truncate(40) }}</small>
+                                                {% endif %}
+                                            </div>
+                                            <small class="text-muted">
+                                                <i class="bi bi-file-earmark-text me-1"></i>
+                                                {{ host.filename|truncate(20) }}
+                                            </small>
+                                        </td>
+                                        
+                                        <td class="text-center">
+                                            {% if host.operating_system %}
+                                                <span class="badge bg-secondary" title="{{ host.operating_system }}">
+                                                    {% if 'Windows' in host.operating_system %}
+                                                        <i class="bi bi-windows"></i> Win
+                                                    {% elif 'Linux' in host.operating_system %}
+                                                        <i class="bi bi-ubuntu"></i> Linux
+                                                    {% elif 'Unix' in host.operating_system %}
+                                                        <i class="bi bi-terminal"></i> Unix
+                                                    {% else %}
+                                                        <i class="bi bi-question-circle"></i> Other
+                                                    {% endif %}
+                                                </span>
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        
+                                        <td class="text-center">
+                                            {% if host.critical_issues > 0 %}
+                                                <span class="badge severity-critical">{{ host.critical_issues }}</span>
+                                            {% else %}
+                                                <span class="text-muted">0</span>
+                                            {% endif %}
+                                        </td>
+                                        
+                                        <td class="text-center">
+                                            {% if host.high_issues > 0 %}
+                                                <span class="badge severity-high">{{ host.high_issues }}</span>
+                                            {% else %}
+                                                <span class="text-muted">0</span>
+                                            {% endif %}
+                                        </td>
+                                        
+                                        <td class="text-center">
+                                            {% if host.medium_issues > 0 %}
+                                                <span class="badge severity-medium">{{ host.medium_issues }}</span>
+                                            {% else %}
+                                                <span class="text-muted">0</span>
+                                            {% endif %}
+                                        </td>
+                                        
+                                        <td class="text-center">
+                                            {% if host.low_issues > 0 %}
+                                                <span class="badge severity-low">{{ host.low_issues }}</span>
+                                            {% else %}
+                                                <span class="text-muted">0</span>
+                                            {% endif %}
+                                        </td>
+                                        
+                                        <td class="text-center">
+                                            <strong class="text-primary">{{ host.total_issues }}</strong>
+                                        </td>
+                                        
+                                        <td class="text-center">
+                                            <a href="{{ url_for('host_detail', host_id=host.id) }}" 
+                                               class="btn btn-sm btn-outline-primary" 
+                                               title="View host details">
+                                                <i class="bi bi-eye"></i>
+                                                Details
+                                            </a>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-pc-display display-1 text-muted mb-3"></i>
+                        <h5 class="text-muted">No Hosts Found</h5>
+                        <p class="text-muted">Upload Nessus scans to see host analysis</p>
+                        <a href="{{ url_for('upload') }}" class="btn btn-primary">
+                            <i class="bi bi-cloud-upload me-2"></i>
+                            Upload Scan
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        populateFilterOptions();
+    });
+    
+    function toggleFilters() {
+        const filtersSection = document.getElementById('filtersSection');
+        filtersSection.classList.toggle('d-none');
+    }
+    
+    function populateFilterOptions() {
+        const hostRows = document.querySelectorAll('.host-row');
+        const osFilter = document.getElementById('osFilter');
+        const scanFilter = document.getElementById('scanFilter');
+        
+        // Collect unique operating systems
+        const osSet = new Set();
+        const scanSet = new Set();
+        
+        hostRows.forEach(row => {
+            const os = row.dataset.os;
+            const scan = row.dataset.scan;
+            
+            if (os && os.trim()) {
+                osSet.add(os.trim());
+            }
+            if (scan && scan.trim()) {
+                scanSet.add(scan.trim());
+            }
+        });
+        
+        // Populate OS filter
+        Array.from(osSet).sort().forEach(os => {
+            const option = document.createElement('option');
+            option.value = os;
+            option.textContent = os.length > 30 ? os.substring(0, 30) + '...' : os;
+            osFilter.appendChild(option);
+        });
+        
+        // Populate scan filter
+        Array.from(scanSet).sort().forEach(scan => {
+            const option = document.createElement('option');
+            option.value = scan;
+            option.textContent = scan.length > 30 ? scan.substring(0, 30) + '...' : scan;
+            scanFilter.appendChild(option);
+        });
+    }
+    
+    function filterHosts() {
+        const severityFilter = document.getElementById('severityFilter').value;
+        const osFilter = document.getElementById('osFilter').value;
+        const scanFilter = document.getElementById('scanFilter').value;
+        const searchFilter = document.getElementById('searchFilter').value.toLowerCase();
+        const hostRows = document.querySelectorAll('.host-row');
+        
+        let visibleCount = 0;
+        
+        hostRows.forEach(row => {
+            let showRow = true;
+            
+            // Severity filter
+            if (severityFilter) {
+                const critical = parseInt(row.dataset.critical) || 0;
+                const high = parseInt(row.dataset.high) || 0;
+                const medium = parseInt(row.dataset.medium) || 0;
+                const low = parseInt(row.dataset.low) || 0;
+                
+                switch (severityFilter) {
+                    case 'critical':
+                        showRow = critical > 0;
+                        break;
+                    case 'high':
+                        showRow = critical > 0 || high > 0;
+                        break;
+                    case 'medium':
+                        showRow = critical > 0 || high > 0 || medium > 0;
+                        break;
+                    case 'low':
+                        showRow = critical > 0 || high > 0 || medium > 0 || low > 0;
+                        break;
+                }
+            }
+            
+            // OS filter
+            if (showRow && osFilter) {
+                showRow = row.dataset.os === osFilter;
+            }
+            
+            // Scan filter
+            if (showRow && scanFilter) {
+                showRow = row.dataset.scan === scanFilter;
+            }
+            
+            // Search filter
+            if (showRow && searchFilter) {
+                const rowText = row.textContent.toLowerCase();
+                showRow = rowText.includes(searchFilter);
+            }
+            
+            // Show/hide row
+            if (showRow) {
+                row.style.display = '';
+                visibleCount++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+        
+        // Update filtered count
+        document.getElementById('filteredCount').textContent = visibleCount;
+    }
+    
+    function clearFilters() {
+        document.getElementById('severityFilter').value = '';
+        document.getElementById('osFilter').value = '';
+        document.getElementById('scanFilter').value = '';
+        document.getElementById('searchFilter').value = '';
+        
+        const hostRows = document.querySelectorAll('.host-row');
+        hostRows.forEach(row => {
+            row.style.display = '';
+        });
+        
+        document.getElementById('filteredCount').textContent = hostRows.length;
+    }
+</script>
+{% endblock %}
