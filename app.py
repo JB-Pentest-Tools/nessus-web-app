@@ -1385,12 +1385,25 @@ def generate_export_data(host_ids, issue_ids, selected_columns, parser_mode='aut
                     )
                 else:
                     # Use specific parser
-                    for parser in parser_manager.parsers:
-                        if parser.__class__.__name__.lower().replace('parser', '').replace('vulnerability', '_vulnerability') == parser_mode:
-                            parsed_result = parser.parse(row['plugin_output'], row['plugin_name'], row['severity'])
-                            break
-                    else:
-                        # Fallback to generic
+                    parsed_result = None
+                    
+                    # Map parser modes to class names
+                    parser_class_map = {
+                        'linux_package': 'LinuxPackageParser',
+                        'windows_update': 'WindowsUpdateParser', 
+                        'web_vulnerability': 'WebVulnerabilityParser',
+                        'service_vulnerability': 'ServiceVulnerabilityParser'
+                    }
+                    
+                    target_class = parser_class_map.get(parser_mode)
+                    if target_class:
+                        for parser in parser_manager.parsers:
+                            if parser.__class__.__name__ == target_class:
+                                parsed_result = parser.parse(row['plugin_output'], row['plugin_name'], row['severity'])
+                                break
+                    
+                    # Fallback to generic if no parser found
+                    if parsed_result is None:
                         parsed_result = {
                             'parser_type': 'generic',
                             'confidence': 0.0,

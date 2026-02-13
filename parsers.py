@@ -388,15 +388,21 @@ class ParsedOutputManager:
         """Format parsed data for CSV export based on selected columns"""
         result = {}
         
+        # Only format parsed fields, not database fields
+        parsed_fields = ['package_name', 'installed_version', 'fixed_version', 'advisory_id', 'cves', 
+                        'kb_numbers', 'ms_bulletins', 'missing_updates', 'update_level',
+                        'urls', 'parameters', 'methods', 'payloads',
+                        'service_version', 'service_banner', 'service_protocol']
+        
         # Map parsed data to export columns
         for column in selected_columns:
+            # Skip database fields - they'll be handled elsewhere
+            if column not in parsed_fields:
+                continue
+                
             value = ""
             
-            if column in ['host_ip', 'host_fqdn', 'plugin_name', 'severity', 'cvss_score', 'port', 'protocol', 'service_name']:
-                # These come from the database, not the parsed output
-                value = parsed_data.get(column, "")
-            
-            elif parsed_data.get('parser_type') == 'linux_package':
+            if parsed_data.get('parser_type') == 'linux_package':
                 if column == 'package_name' and parsed_data.get('packages'):
                     value = ', '.join([pkg.get('name', '') for pkg in parsed_data['packages']])
                 elif column == 'installed_version' and parsed_data.get('packages'):
