@@ -22,6 +22,9 @@ import hashlib
 from datetime import datetime
 from werkzeug.utils import secure_filename
 import json
+import csv
+import io
+from parsers import parser_manager
 
 app = Flask(__name__)
 app.secret_key = 'nessus-web-app-secret-key-change-in-production'
@@ -1093,6 +1096,329 @@ def api_bulk_delete_scans():
             'success': False,
             'error': str(e)
         }), 500
+
+@app.route('/export')
+def export():
+    """Export tab - data selection and CSV export"""
+    # Initialize database to ensure tables exist
+    init_database()
+    
+    return render_template('export.html')
+
+@app.route('/api/export/hosts')
+def api_export_hosts():
+    """API endpoint to get all hosts for export selection"""
+    # Initialize database to ensure tables exist
+    init_database()
+    
+    conn = get_db_connection()
+    
+    try:
+        # Get all hosts with their issue counts
+        hosts = conn.execute('''
+        SELECT h.id, h.host_ip, h.host_fqdn, h.operating_system,
+               h.critical_issues, h.high_issues, h.medium_issues, 
+               h.low_issues, h.info_issues, h.total_issues,
+               s.filename as scan_filename
+        FROM hosts h
+        JOIN scans s ON h.scan_id = s.id
+        ORDER BY h.host_ip
+        ''').fetchall()
+        
+        host_list = []
+        for host in hosts:
+            host_list.append({
+                'id': host['id'],
+                'host_ip': host['host_ip'],
+                'host_fqdn': host['host_fqdn'],
+                'operating_system': host['operating_system'],
+                'critical_issues': host['critical_issues'],
+                'high_issues': host['high_issues'],
+                'medium_issues': host['medium_issues'],
+                'low_issues': host['low_issues'],
+                'info_issues': host['info_issues'],
+                'total_issues': host['total_issues'],
+                'scan_filename': host['scan_filename']
+            })
+        
+        return jsonify({
+            'success': True,
+            'hosts': host_list
+        })
+        
+    except Exception as e:
+        print(f"Error in export hosts API: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+    finally:
+        conn.close()
+
+@app.route('/api/export/issues')
+def api_export_issues():
+    """API endpoint to get all issues for export selection"""
+    # Initialize database to ensure tables exist
+    init_database()
+    
+    conn = get_db_connection()
+    
+    try:
+        # Get all unique issues with their metadata
+        issues = conn.execute('''
+        SELECT i.id, i.plugin_id, i.plugin_name, i.severity, 
+               i.risk_factor, i.cvss_score, i.cvss3_score,
+               i.description, i.solution, i.cve, i.affected_hosts
+        FROM issues i
+        ORDER BY 
+            CASE i.severity 
+                WHEN 'Critical' THEN 1
+                WHEN 'High' THEN 2
+                WHEN 'Medium' THEN 3
+                WHEN 'Low' THEN 4
+                WHEN 'Info' THEN 5
+                ELSE 6
+            END,
+            i.affected_hosts DESC
+        ''').fetchall()
+        
+        issue_list = []
+        for issue in issues:
+            issue_list.append({
+                'id': issue['id'],
+                'plugin_id': issue['plugin_id'],
+                'plugin_name': issue['plugin_name'],
+                'severity': issue['severity'],
+                'risk_factor': issue['risk_factor'],
+                'cvss_score': issue['cvss_score'],
+                'cvss3_score': issue['cvss3_score'],
+                'description': issue['description'],
+                'solution': issue['solution'],
+                'cve': issue['cve'],
+                'affected_hosts': issue['affected_hosts']
+            })
+        
+        return jsonify({
+            'success': True,
+            'issues': issue_list
+        })
+        
+    except Exception as e:
+        print(f"Error in export issues API: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+    finally:
+        conn.close()
+
+@app.route('/api/export/columns')
+def api_export_columns():
+    """API endpoint to get available columns based on parser type"""
+    parser_type = request.args.get('parser_type', 'all')
+    
+    try:
+        columns = parser_manager.get_available_columns(parser_type)
+        
+        return jsonify({
+            'success': True,
+            'columns': columns
+        })
+        
+    except Exception as e:
+        print(f"Error in export columns API: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/export/preview', methods=['POST'])
+def api_export_preview():
+    """API endpoint to preview parsed export data"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No data provided'}), 400
+        
+        hosts = data.get('hosts', [])
+        issues = data.get('issues', [])
+        columns = data.get('columns', [])
+        parser_mode = data.get('parser_mode', 'auto')
+        
+        if not hosts or not issues or not columns:
+            return jsonify({'success': False, 'error': 'Missing hosts, issues, or columns'}), 400
+        
+        # Get the actual data from database
+        preview_data, parser_stats = generate_export_data(hosts, issues, columns, parser_mode, limit=20)
+        
+        return jsonify({
+            'success': True,
+            'data': preview_data,
+            'parser_stats': parser_stats
+        })
+        
+    except Exception as e:
+        print(f"Error in export preview API: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/export/csv', methods=['POST'])
+def api_export_csv():
+    """API endpoint to generate and download CSV export"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No data provided'}), 400
+        
+        hosts = data.get('hosts', [])
+        issues = data.get('issues', [])
+        columns = data.get('columns', [])
+        parser_mode = data.get('parser_mode', 'auto')
+        
+        if not hosts or not issues or not columns:
+            return jsonify({'success': False, 'error': 'Missing hosts, issues, or columns'}), 400
+        
+        # Generate the full export data
+        export_data, parser_stats = generate_export_data(hosts, issues, columns, parser_mode)
+        
+        # Create CSV
+        output = io.StringIO()
+        writer = csv.DictWriter(output, fieldnames=columns)
+        writer.writeheader()
+        
+        for row in export_data:
+            # Ensure all columns are present
+            csv_row = {col: row.get(col, '') for col in columns}
+            writer.writerow(csv_row)
+        
+        # Create response
+        csv_content = output.getvalue()
+        output.close()
+        
+        # Return as downloadable file
+        response = app.response_class(
+            csv_content,
+            mimetype='text/csv',
+            headers={"Content-Disposition": f"attachment; filename=nessus-export-{datetime.now().strftime('%Y%m%d-%H%M%S')}.csv"}
+        )
+        
+        return response
+        
+    except Exception as e:
+        print(f"Error in export CSV API: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+def generate_export_data(host_ids, issue_ids, selected_columns, parser_mode='auto', limit=None):
+    """Generate export data by joining hosts, issues, and parsing output fields"""
+    conn = get_db_connection()
+    parser_stats = {}
+    
+    try:
+        # Convert IDs to SQL-safe format
+        host_ids_str = ','.join(map(str, host_ids))
+        issue_ids_str = ','.join(map(str, issue_ids))
+        
+        # Get the joined data
+        query = '''
+        SELECT h.id as host_id, h.host_ip, h.host_fqdn, h.operating_system,
+               h.mac_address, h.host_start, h.host_end,
+               i.id as issue_id, i.plugin_id, i.plugin_name, i.severity,
+               i.risk_factor, i.cvss_score, i.cvss3_score, i.description,
+               i.solution, i.see_also, i.cve,
+               hi.port, hi.protocol, hi.service_name, hi.plugin_output,
+               s.filename as scan_filename, s.scanner_name
+        FROM hosts h
+        JOIN host_issues hi ON h.id = hi.host_id
+        JOIN issues i ON hi.issue_id = i.id
+        JOIN scans s ON h.scan_id = s.id
+        WHERE h.id IN ({}) AND i.id IN ({})
+        ORDER BY h.host_ip, i.severity DESC, i.plugin_name
+        '''.format(host_ids_str, issue_ids_str)
+        
+        if limit:
+            query += f' LIMIT {limit}'
+        
+        rows = conn.execute(query).fetchall()
+        
+        export_data = []
+        
+        for row in rows:
+            # Base data from database
+            base_data = {
+                'host_ip': row['host_ip'],
+                'host_fqdn': row['host_fqdn'] or '',
+                'operating_system': row['operating_system'] or '',
+                'mac_address': row['mac_address'] or '',
+                'plugin_name': row['plugin_name'],
+                'plugin_id': row['plugin_id'],
+                'severity': row['severity'],
+                'risk_factor': row['risk_factor'] or '',
+                'cvss_score': row['cvss_score'] or '',
+                'cvss3_score': row['cvss3_score'] or '',
+                'description': row['description'] or '',
+                'solution': row['solution'] or '',
+                'see_also': row['see_also'] or '',
+                'cve': row['cve'] or '',
+                'port': row['port'] or '',
+                'protocol': row['protocol'] or '',
+                'service_name': row['service_name'] or '',
+                'plugin_output': row['plugin_output'] or '',
+                'scan_filename': row['scan_filename'] or '',
+                'scanner_name': row['scanner_name'] or ''
+            }
+            
+            # Parse the plugin output if needed
+            parsed_data = {}
+            if row['plugin_output'] and any(col in selected_columns for col in ['package_name', 'installed_version', 'fixed_version', 'advisory_id', 'cves', 'kb_numbers', 'urls', 'parameters']):
+                
+                if parser_mode == 'auto':
+                    # Use automatic detection
+                    parsed_result = parser_manager.parse_vulnerability(
+                        row['plugin_output'], 
+                        row['plugin_name'], 
+                        row['severity']
+                    )
+                else:
+                    # Use specific parser
+                    for parser in parser_manager.parsers:
+                        if parser.__class__.__name__.lower().replace('parser', '').replace('vulnerability', '_vulnerability') == parser_mode:
+                            parsed_result = parser.parse(row['plugin_output'], row['plugin_name'], row['severity'])
+                            break
+                    else:
+                        # Fallback to generic
+                        parsed_result = {
+                            'parser_type': 'generic',
+                            'confidence': 0.0,
+                            'raw_output': row['plugin_output']
+                        }
+                
+                # Update parser statistics
+                parser_type = parsed_result.get('parser_type', 'unknown')
+                parser_stats[parser_type] = parser_stats.get(parser_type, 0) + 1
+                
+                # Format the parsed data for export
+                parsed_data = parser_manager.format_for_export(parsed_result, selected_columns)
+            
+            # Combine base data with parsed data
+            combined_data = {**base_data, **parsed_data}
+            
+            # Only include selected columns
+            filtered_data = {col: combined_data.get(col, '') for col in selected_columns}
+            
+            export_data.append(filtered_data)
+        
+        return export_data, parser_stats
+        
+    except Exception as e:
+        print(f"Error generating export data: {e}")
+        raise e
+    finally:
+        conn.close()
 
 if __name__ == '__main__':
     print("🔧 Initializing Nessus Web Application...")

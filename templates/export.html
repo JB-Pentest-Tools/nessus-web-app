@@ -1,0 +1,809 @@
+{% extends "base.html" %}
+
+{% block title %}Export - Nessus Web Application{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-download me-3"></i>Export Data</h1>
+    <div>
+        <button class="btn btn-primary" id="previewBtn" disabled>
+            <i class="bi bi-eye me-2"></i>Preview
+        </button>
+        <button class="btn btn-success" id="exportBtn" disabled>
+            <i class="bi bi-download me-2"></i>Export CSV
+        </button>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Selection Panel -->
+    <div class="col-md-4">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-check-square me-2"></i>
+                    Select Data
+                </h5>
+            </div>
+            <div class="card-body">
+                <!-- Quick Filters -->
+                <div class="mb-3">
+                    <label class="form-label">Quick Filters</label>
+                    <div class="btn-group d-flex" role="group">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="selectAllHosts">
+                            All Hosts
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="selectHighSeverity">
+                            High/Critical
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="clearSelection">
+                            Clear
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Severity Filter -->
+                <div class="mb-3">
+                    <label class="form-label">Severity Filter</label>
+                    <div class="form-check-group">
+                        <div class="form-check">
+                            <input class="form-check-input severity-filter" type="checkbox" value="Critical" id="criticalFilter" checked>
+                            <label class="form-check-label severity-critical px-2 rounded" for="criticalFilter">Critical</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input severity-filter" type="checkbox" value="High" id="highFilter" checked>
+                            <label class="form-check-label severity-high px-2 rounded" for="highFilter">High</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input severity-filter" type="checkbox" value="Medium" id="mediumFilter">
+                            <label class="form-check-label severity-medium px-2 rounded" for="mediumFilter">Medium</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input severity-filter" type="checkbox" value="Low" id="lowFilter">
+                            <label class="form-check-label severity-low px-2 rounded" for="lowFilter">Low</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input severity-filter" type="checkbox" value="Info" id="infoFilter">
+                            <label class="form-check-label severity-info px-2 rounded" for="infoFilter">Info</label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Host Selection -->
+                <div class="mb-3">
+                    <label class="form-label">Hosts <span class="badge bg-info" id="hostCount">0</span></label>
+                    <div class="form-control" style="height: 200px; overflow-y: auto;" id="hostSelection">
+                        <div class="text-center text-muted">
+                            <div class="spinner-border spinner-border-sm" role="status"></div>
+                            <p class="small">Loading hosts...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Issue Selection -->
+                <div class="mb-3">
+                    <label class="form-label">Issues <span class="badge bg-warning" id="issueCount">0</span></label>
+                    <div class="form-control" style="height: 200px; overflow-y: auto;" id="issueSelection">
+                        <div class="text-center text-muted">
+                            <div class="spinner-border spinner-border-sm" role="status"></div>
+                            <p class="small">Loading issues...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Column Configuration -->
+    <div class="col-md-4">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-columns-gap me-2"></i>
+                    Configure Columns
+                </h5>
+            </div>
+            <div class="card-body">
+                <!-- Parser Type Selection -->
+                <div class="mb-3">
+                    <label class="form-label">Parsing Mode</label>
+                    <select class="form-select" id="parserMode">
+                        <option value="auto">Auto-detect (Recommended)</option>
+                        <option value="linux_package">Linux Package Updates</option>
+                        <option value="windows_update">Windows Updates</option>
+                        <option value="web_vulnerability">Web Vulnerabilities</option>
+                        <option value="service_vulnerability">Service Vulnerabilities</option>
+                        <option value="generic">Generic (No parsing)</option>
+                    </select>
+                    <div class="form-text">Auto-detect will choose the best parser for each vulnerability</div>
+                </div>
+
+                <!-- Column Selection -->
+                <div class="mb-3">
+                    <label class="form-label">Select Columns</label>
+                    <div class="d-flex justify-content-between mb-2">
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="selectBasicColumns">
+                            Basic Columns
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="selectAllColumns">
+                            All Columns
+                        </button>
+                    </div>
+                    <div class="form-control" style="height: 300px; overflow-y: auto;" id="columnSelection">
+                        <div class="text-center text-muted">
+                            <div class="spinner-border spinner-border-sm" role="status"></div>
+                            <p class="small">Loading columns...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Column Order -->
+                <div class="mb-3">
+                    <label class="form-label">Column Order</label>
+                    <div class="form-text mb-2">Drag to reorder selected columns</div>
+                    <div class="border rounded p-2" style="min-height: 100px;" id="columnOrder">
+                        <div class="text-muted text-center">
+                            <i class="bi bi-arrow-down-up"></i>
+                            <p class="small mb-0">Selected columns will appear here</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Preview Panel -->
+    <div class="col-md-4">
+        <div class="card shadow-sm">
+            <div class="card-header bg-success text-white">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-eye me-2"></i>
+                    Preview
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="text-center">
+                                <h4 class="text-primary mb-0" id="previewHostCount">0</h4>
+                                <small class="text-muted">Hosts</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="text-center">
+                                <h4 class="text-warning mb-0" id="previewIssueCount">0</h4>
+                                <small class="text-muted">Issues</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Parser Statistics</label>
+                    <div id="parserStats" class="small">
+                        <div class="text-muted">Select data to see parsing statistics</div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Sample Data</label>
+                    <div class="table-responsive" style="max-height: 300px;">
+                        <table class="table table-sm table-striped" id="previewTable">
+                            <thead class="table-dark">
+                                <tr id="previewTableHeaders">
+                                    <th>No data</th>
+                                </tr>
+                            </thead>
+                            <tbody id="previewTableBody">
+                                <tr>
+                                    <td class="text-muted">Select data and columns to preview</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <strong>Smart Parsing:</strong> The system will automatically detect vulnerability types and extract structured data like package names, versions, and advisory IDs.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Export Progress Modal -->
+<div class="modal fade" id="exportModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-download me-2"></i>
+                    Export Progress
+                </h5>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex align-items-center">
+                    <div class="spinner-border text-primary me-3" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <div>
+                        <div id="exportStatus">Processing export...</div>
+                        <small class="text-muted" id="exportDetails">Please wait while we prepare your data</small>
+                    </div>
+                </div>
+                <div class="progress mt-3">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                         role="progressbar" style="width: 100%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Parser Help Modal -->
+<div class="modal fade" id="parserHelpModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-question-circle me-2"></i>
+                    Smart Parsing Guide
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Linux Package Updates</h6>
+                        <p class="small">Extracts package names, installed versions, and fixed versions from:</p>
+                        <ul class="small">
+                            <li>RHEL/CentOS advisories (RHSA-)</li>
+                            <li>Ubuntu security notices (USN-)</li>
+                            <li>Debian security advisories (DSA-)</li>
+                        </ul>
+                        
+                        <h6>Windows Updates</h6>
+                        <p class="small">Parses Microsoft security updates:</p>
+                        <ul class="small">
+                            <li>KB numbers (KB123456)</li>
+                            <li>MS bulletins (MS17-010)</li>
+                            <li>Missing updates and patch levels</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Web Vulnerabilities</h6>
+                        <p class="small">Extracts web application details:</p>
+                        <ul class="small">
+                            <li>URLs and endpoints</li>
+                            <li>Vulnerable parameters</li>
+                            <li>HTTP methods and payloads</li>
+                        </ul>
+                        
+                        <h6>Service Vulnerabilities</h6>
+                        <p class="small">Parses network service information:</p>
+                        <ul class="small">
+                            <li>Service versions and banners</li>
+                            <li>Protocol information</li>
+                            <li>Detection details</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="alert alert-success mt-3">
+                    <strong>Auto-detect Mode:</strong> The system will automatically choose the best parser for each vulnerability based on content analysis.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let selectedHosts = new Set();
+let selectedIssues = new Set();
+let selectedColumns = new Set(['host_ip', 'plugin_name', 'severity']);
+let availableColumns = [];
+let hostData = [];
+let issueData = [];
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Load initial data
+    loadHosts();
+    loadIssues();
+    loadColumns();
+    
+    // Setup event listeners
+    setupEventListeners();
+    
+    // Update UI
+    updateCounts();
+});
+
+function setupEventListeners() {
+    // Quick filters
+    document.getElementById('selectAllHosts').addEventListener('click', selectAllHosts);
+    document.getElementById('selectHighSeverity').addEventListener('click', selectHighSeverity);
+    document.getElementById('clearSelection').addEventListener('click', clearSelection);
+    
+    // Severity filters
+    document.querySelectorAll('.severity-filter').forEach(filter => {
+        filter.addEventListener('change', updateFilteredData);
+    });
+    
+    // Parser mode change
+    document.getElementById('parserMode').addEventListener('change', loadColumns);
+    
+    // Column selection buttons
+    document.getElementById('selectBasicColumns').addEventListener('click', selectBasicColumns);
+    document.getElementById('selectAllColumns').addEventListener('click', selectAllColumnsBtn);
+    
+    // Export buttons
+    document.getElementById('previewBtn').addEventListener('click', previewData);
+    document.getElementById('exportBtn').addEventListener('click', exportData);
+}
+
+async function loadHosts() {
+    try {
+        const response = await fetch('/api/export/hosts');
+        const result = await response.json();
+        
+        if (result.success) {
+            hostData = result.hosts;
+            renderHostSelection();
+            updateCounts();
+        } else {
+            throw new Error(result.error || 'Failed to load hosts');
+        }
+    } catch (error) {
+        console.error('Error loading hosts:', error);
+        document.getElementById('hostSelection').innerHTML = `
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-circle me-2"></i>
+                Failed to load hosts: ${error.message}
+            </div>
+        `;
+    }
+}
+
+async function loadIssues() {
+    try {
+        const response = await fetch('/api/export/issues');
+        const result = await response.json();
+        
+        if (result.success) {
+            issueData = result.issues;
+            renderIssueSelection();
+            updateCounts();
+        } else {
+            throw new Error(result.error || 'Failed to load issues');
+        }
+    } catch (error) {
+        console.error('Error loading issues:', error);
+        document.getElementById('issueSelection').innerHTML = `
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-circle me-2"></i>
+                Failed to load issues: ${error.message}
+            </div>
+        `;
+    }
+}
+
+async function loadColumns() {
+    const parserMode = document.getElementById('parserMode').value;
+    
+    try {
+        const response = await fetch(`/api/export/columns?parser_type=${parserMode}`);
+        const result = await response.json();
+        
+        if (result.success) {
+            availableColumns = result.columns;
+            renderColumnSelection();
+        } else {
+            throw new Error(result.error || 'Failed to load columns');
+        }
+    } catch (error) {
+        console.error('Error loading columns:', error);
+        document.getElementById('columnSelection').innerHTML = `
+            <div class="alert alert-danger">
+                Failed to load columns: ${error.message}
+            </div>
+        `;
+    }
+}
+
+function renderHostSelection() {
+    const selectedSeverities = Array.from(document.querySelectorAll('.severity-filter:checked')).map(el => el.value);
+    const filteredHosts = hostData.filter(host => {
+        // Check if host has any issues with selected severity
+        return selectedSeverities.some(severity => host[`${severity.toLowerCase()}_issues`] > 0);
+    });
+    
+    const html = filteredHosts.map(host => {
+        const isSelected = selectedHosts.has(host.id);
+        const totalIssues = host.critical_issues + host.high_issues + host.medium_issues + host.low_issues + host.info_issues;
+        
+        return `
+            <div class="form-check">
+                <input class="form-check-input host-checkbox" type="checkbox" 
+                       value="${host.id}" ${isSelected ? 'checked' : ''}
+                       data-host-ip="${host.host_ip}">
+                <label class="form-check-label small" for="host${host.id}">
+                    <strong>${host.host_ip}</strong>
+                    ${host.host_fqdn ? `<br><small class="text-muted">${host.host_fqdn}</small>` : ''}
+                    <br><small class="text-warning">${totalIssues} issues</small>
+                </label>
+            </div>
+        `;
+    }).join('');
+    
+    document.getElementById('hostSelection').innerHTML = html || '<div class="text-muted">No hosts match current filters</div>';
+    
+    // Setup event listeners
+    document.querySelectorAll('.host-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const hostId = parseInt(this.value);
+            if (this.checked) {
+                selectedHosts.add(hostId);
+            } else {
+                selectedHosts.delete(hostId);
+            }
+            updateCounts();
+            updatePreview();
+        });
+    });
+}
+
+function renderIssueSelection() {
+    const selectedSeverities = Array.from(document.querySelectorAll('.severity-filter:checked')).map(el => el.value);
+    const filteredIssues = issueData.filter(issue => selectedSeverities.includes(issue.severity));
+    
+    const html = filteredIssues.map(issue => {
+        const isSelected = selectedIssues.has(issue.id);
+        
+        return `
+            <div class="form-check">
+                <input class="form-check-input issue-checkbox" type="checkbox" 
+                       value="${issue.id}" ${isSelected ? 'checked' : ''}>
+                <label class="form-check-label small" for="issue${issue.id}">
+                    <span class="badge severity-${issue.severity.toLowerCase()} me-2">${issue.severity}</span>
+                    <strong>${issue.plugin_name}</strong>
+                    <br><small class="text-muted">${issue.affected_hosts} host(s)</small>
+                </label>
+            </div>
+        `;
+    }).join('');
+    
+    document.getElementById('issueSelection').innerHTML = html || '<div class="text-muted">No issues match current filters</div>';
+    
+    // Setup event listeners
+    document.querySelectorAll('.issue-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const issueId = parseInt(this.value);
+            if (this.checked) {
+                selectedIssues.add(issueId);
+            } else {
+                selectedIssues.delete(issueId);
+            }
+            updateCounts();
+            updatePreview();
+        });
+    });
+}
+
+function renderColumnSelection() {
+    const html = availableColumns.map(column => {
+        const isSelected = selectedColumns.has(column.key);
+        
+        return `
+            <div class="form-check">
+                <input class="form-check-input column-checkbox" type="checkbox" 
+                       value="${column.key}" ${isSelected ? 'checked' : ''}>
+                <label class="form-check-label" for="col${column.key}">
+                    <strong>${column.name}</strong>
+                    <br><small class="text-muted">${column.description}</small>
+                </label>
+            </div>
+        `;
+    }).join('');
+    
+    document.getElementById('columnSelection').innerHTML = html;
+    
+    // Setup event listeners
+    document.querySelectorAll('.column-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            if (this.checked) {
+                selectedColumns.add(this.value);
+            } else {
+                selectedColumns.delete(this.value);
+            }
+            updateColumnOrder();
+            updatePreview();
+        });
+    });
+    
+    updateColumnOrder();
+}
+
+function updateColumnOrder() {
+    const orderContainer = document.getElementById('columnOrder');
+    const selectedColumnsArray = Array.from(selectedColumns);
+    
+    if (selectedColumnsArray.length === 0) {
+        orderContainer.innerHTML = `
+            <div class="text-muted text-center">
+                <i class="bi bi-arrow-down-up"></i>
+                <p class="small mb-0">Selected columns will appear here</p>
+            </div>
+        `;
+        return;
+    }
+    
+    const html = selectedColumnsArray.map(columnKey => {
+        const column = availableColumns.find(c => c.key === columnKey);
+        if (!column) return '';
+        
+        return `
+            <div class="d-flex justify-content-between align-items-center p-2 mb-1 bg-light rounded" data-column="${columnKey}">
+                <span>
+                    <i class="bi bi-grip-vertical text-muted me-2"></i>
+                    ${column.name}
+                </span>
+                <button class="btn btn-sm btn-outline-danger" onclick="removeColumn('${columnKey}')">
+                    <i class="bi bi-x"></i>
+                </button>
+            </div>
+        `;
+    }).join('');
+    
+    orderContainer.innerHTML = html;
+}
+
+function removeColumn(columnKey) {
+    selectedColumns.delete(columnKey);
+    document.querySelector(`.column-checkbox[value="${columnKey}"]`).checked = false;
+    updateColumnOrder();
+    updatePreview();
+}
+
+function selectAllHosts() {
+    document.querySelectorAll('.host-checkbox').forEach(checkbox => {
+        checkbox.checked = true;
+        selectedHosts.add(parseInt(checkbox.value));
+    });
+    updateCounts();
+    updatePreview();
+}
+
+function selectHighSeverity() {
+    // Clear current selection
+    selectedIssues.clear();
+    
+    // Select high and critical severity
+    document.querySelectorAll('.issue-checkbox').forEach(checkbox => {
+        const issueId = parseInt(checkbox.value);
+        const issue = issueData.find(i => i.id === issueId);
+        if (issue && (issue.severity === 'High' || issue.severity === 'Critical')) {
+            checkbox.checked = true;
+            selectedIssues.add(issueId);
+        } else {
+            checkbox.checked = false;
+        }
+    });
+    updateCounts();
+    updatePreview();
+}
+
+function clearSelection() {
+    selectedHosts.clear();
+    selectedIssues.clear();
+    
+    document.querySelectorAll('.host-checkbox, .issue-checkbox').forEach(checkbox => {
+        checkbox.checked = false;
+    });
+    updateCounts();
+    updatePreview();
+}
+
+function selectBasicColumns() {
+    selectedColumns.clear();
+    ['host_ip', 'plugin_name', 'severity', 'cvss_score', 'port'].forEach(col => {
+        selectedColumns.add(col);
+    });
+    
+    document.querySelectorAll('.column-checkbox').forEach(checkbox => {
+        checkbox.checked = selectedColumns.has(checkbox.value);
+    });
+    
+    updateColumnOrder();
+    updatePreview();
+}
+
+function selectAllColumnsBtn() {
+    selectedColumns.clear();
+    availableColumns.forEach(col => {
+        selectedColumns.add(col.key);
+    });
+    
+    document.querySelectorAll('.column-checkbox').forEach(checkbox => {
+        checkbox.checked = true;
+    });
+    
+    updateColumnOrder();
+    updatePreview();
+}
+
+function updateFilteredData() {
+    renderHostSelection();
+    renderIssueSelection();
+    updateCounts();
+}
+
+function updateCounts() {
+    document.getElementById('hostCount').textContent = selectedHosts.size;
+    document.getElementById('issueCount').textContent = selectedIssues.size;
+    document.getElementById('previewHostCount').textContent = selectedHosts.size;
+    document.getElementById('previewIssueCount').textContent = selectedIssues.size;
+    
+    // Enable/disable preview and export buttons
+    const hasData = selectedHosts.size > 0 && selectedIssues.size > 0 && selectedColumns.size > 0;
+    document.getElementById('previewBtn').disabled = !hasData;
+    document.getElementById('exportBtn').disabled = !hasData;
+}
+
+async function previewData() {
+    if (selectedHosts.size === 0 || selectedIssues.size === 0 || selectedColumns.size === 0) {
+        alert('Please select hosts, issues, and columns to preview');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/export/preview', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                hosts: Array.from(selectedHosts),
+                issues: Array.from(selectedIssues),
+                columns: Array.from(selectedColumns),
+                parser_mode: document.getElementById('parserMode').value
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            renderPreview(result.data);
+            displayParserStats(result.parser_stats);
+        } else {
+            throw new Error(result.error || 'Preview failed');
+        }
+    } catch (error) {
+        console.error('Preview error:', error);
+        alert(`Preview failed: ${error.message}`);
+    }
+}
+
+function renderPreview(data) {
+    const table = document.getElementById('previewTable');
+    const headers = document.getElementById('previewTableHeaders');
+    const body = document.getElementById('previewTableBody');
+    
+    // Render headers
+    const columnHeaders = Array.from(selectedColumns).map(columnKey => {
+        const column = availableColumns.find(c => c.key === columnKey);
+        return column ? column.name : columnKey;
+    });
+    
+    headers.innerHTML = columnHeaders.map(header => `<th>${header}</th>`).join('');
+    
+    // Render sample rows (first 5)
+    const sampleRows = data.slice(0, 5);
+    const rowsHtml = sampleRows.map(row => {
+        const cells = Array.from(selectedColumns).map(columnKey => {
+            return `<td>${row[columnKey] || ''}</td>`;
+        }).join('');
+        return `<tr>${cells}</tr>`;
+    }).join('');
+    
+    body.innerHTML = rowsHtml || '<tr><td colspan="100%" class="text-muted text-center">No data to preview</td></tr>';
+    
+    // Add note about sample size
+    if (data.length > 5) {
+        const note = document.createElement('tr');
+        note.innerHTML = `<td colspan="100%" class="text-muted text-center small">Showing 5 of ${data.length} rows</td>`;
+        body.appendChild(note);
+    }
+}
+
+function displayParserStats(stats) {
+    const container = document.getElementById('parserStats');
+    
+    if (!stats) {
+        container.innerHTML = '<div class="text-muted">No parsing statistics available</div>';
+        return;
+    }
+    
+    const html = Object.entries(stats).map(([parserType, count]) => {
+        const badgeClass = parserType === 'auto' ? 'bg-primary' : 
+                          parserType === 'linux_package' ? 'bg-success' :
+                          parserType === 'windows_update' ? 'bg-info' :
+                          parserType === 'web_vulnerability' ? 'bg-warning' :
+                          'bg-secondary';
+        
+        return `<span class="badge ${badgeClass} me-1">${parserType}: ${count}</span>`;
+    }).join('');
+    
+    container.innerHTML = html;
+}
+
+async function exportData() {
+    if (selectedHosts.size === 0 || selectedIssues.size === 0 || selectedColumns.size === 0) {
+        alert('Please select hosts, issues, and columns to export');
+        return;
+    }
+    
+    // Show progress modal
+    const modal = new bootstrap.Modal(document.getElementById('exportModal'));
+    modal.show();
+    
+    try {
+        const response = await fetch('/api/export/csv', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                hosts: Array.from(selectedHosts),
+                issues: Array.from(selectedIssues),
+                columns: Array.from(selectedColumns),
+                parser_mode: document.getElementById('parserMode').value
+            })
+        });
+        
+        if (response.ok) {
+            // Download file
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = `nessus-export-${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            
+            modal.hide();
+            
+            // Show success message
+            const alert = document.createElement('div');
+            alert.className = 'alert alert-success alert-dismissible fade show';
+            alert.innerHTML = `
+                <i class="bi bi-check-circle me-2"></i>
+                CSV export completed successfully!
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.querySelector('.flash-messages').appendChild(alert);
+        } else {
+            throw new Error('Export failed');
+        }
+    } catch (error) {
+        modal.hide();
+        console.error('Export error:', error);
+        alert(`Export failed: ${error.message}`);
+    }
+}
+
+function updatePreview() {
+    // Auto-update preview when selection changes
+    if (selectedHosts.size > 0 && selectedIssues.size > 0 && selectedColumns.size > 0) {
+        // Debounce preview updates
+        clearTimeout(window.previewTimeout);
+        window.previewTimeout = setTimeout(previewData, 1000);
+    }
+}
+</script>
+{% endblock %}
