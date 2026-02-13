@@ -1373,7 +1373,7 @@ def generate_export_data(host_ids, issue_ids, selected_columns, parser_mode='aut
             }
             
             # Parse the plugin output if needed
-            parsed_data = {}
+            parsed_result = None
             if row['plugin_output'] and any(col in selected_columns for col in ['package_name', 'installed_version', 'fixed_version', 'advisory_id', 'cves', 'kb_numbers', 'urls', 'parameters']):
                 
                 if parser_mode == 'auto':
@@ -1413,17 +1413,49 @@ def generate_export_data(host_ids, issue_ids, selected_columns, parser_mode='aut
                 # Update parser statistics
                 parser_type = parsed_result.get('parser_type', 'unknown')
                 parser_stats[parser_type] = parser_stats.get(parser_type, 0) + 1
+            
+            # Handle multiple packages by creating separate rows
+            if (parsed_result and 
+                parsed_result.get('parser_type') == 'linux_package' and 
+                parsed_result.get('packages') and 
+                len(parsed_result.get('packages', [])) > 1 and
+                any(col in selected_columns for col in ['package_name', 'installed_version', 'fixed_version'])):
                 
-                # Format the parsed data for export
-                parsed_data = parser_manager.format_for_export(parsed_result, selected_columns)
-            
-            # Combine base data with parsed data
-            combined_data = {**base_data, **parsed_data}
-            
-            # Only include selected columns
-            filtered_data = {col: combined_data.get(col, '') for col in selected_columns}
-            
-            export_data.append(filtered_data)
+                # Create one row per package
+                for package in parsed_result.get('packages', []):
+                    # Create individual package data
+                    individual_parsed_result = {
+                        'parser_type': 'linux_package',
+                        'confidence': parsed_result.get('confidence', 0.0),
+                        'packages': [package],  # Single package
+                        'advisory_id': parsed_result.get('advisory_id'),
+                        'cves': parsed_result.get('cves', [])
+                    }
+                    
+                    # Format the parsed data for this package
+                    parsed_data = parser_manager.format_for_export(individual_parsed_result, selected_columns)
+                    
+                    # Combine base data with parsed data
+                    combined_data = {**base_data, **parsed_data}
+                    
+                    # Only include selected columns
+                    filtered_data = {col: combined_data.get(col, '') for col in selected_columns}
+                    
+                    export_data.append(filtered_data)
+            else:
+                # Single package or non-package vulnerability - handle normally
+                parsed_data = {}
+                if parsed_result:
+                    # Format the parsed data for export
+                    parsed_data = parser_manager.format_for_export(parsed_result, selected_columns)
+                
+                # Combine base data with parsed data
+                combined_data = {**base_data, **parsed_data}
+                
+                # Only include selected columns
+                filtered_data = {col: combined_data.get(col, '') for col in selected_columns}
+                
+                export_data.append(filtered_data)
         
         return export_data, parser_stats
         
